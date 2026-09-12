@@ -1984,3 +1984,259 @@ Milestone 1: IN PROGRESS
 ### Next Action
 
 Run the canonical validator across all 164 HumanEval-X Go problems and collect the complete oracle validity result.
+
+---
+
+## Step 1.13 — Full Canonical HumanEval-X Oracle Run
+
+### Status
+
+Completed.
+
+### Goal
+
+Run every canonical HumanEval-X Go solution through the Docker oracle and measure oracle validity before applying any exclusions.
+
+### Command
+
+    python -u scripts/validate_oracle.py --n 164
+
+The complete console output was also captured under:
+
+    results/oracle/canonical_164.txt
+
+### Result
+
+Total benchmark problems:
+
+    164
+
+Canonical solutions passing:
+
+    152
+
+Canonical solutions failing:
+
+    12
+
+Pass rate:
+
+    152 / 164
+    92.68%
+
+### Failed Tasks
+
+    Go/10
+    Go/17
+    Go/20
+    Go/27
+    Go/32
+    Go/38
+    Go/50
+    Go/59
+    Go/75
+    Go/90
+    Go/108
+    Go/162
+
+### Failure Type
+
+All 12 failures were classified as:
+
+    COMPILE_ERROR
+
+No canonical problem produced:
+
+    TEST_FAIL
+    TIMEOUT
+
+### Observed Failure Patterns
+
+Missing helper functions:
+
+    Go/10  IsPalindrome
+    Go/32  Poly
+    Go/38  EncodeCyclic
+    Go/50  EncodeShift
+
+Missing solution imports included:
+
+    strings
+    math
+    sort
+
+Unused imports were also observed in some generated source/test files.
+
+### Interpretation
+
+The result is below the Milestone 1 target of:
+
+    >= 160 / 164 PASS
+
+However, the failures are strongly suggestive of HumanEval-X source assembly issues rather than incorrect canonical implementations.
+
+No benchmark exclusions will be made yet.
+
+The failed records must first be inspected to determine whether required helper functions and imports are present in other HumanEval-X fields such as `prompt`.
+
+### Next Action
+
+Inspect all 12 failing HumanEval-X records and determine a general source/test assembly rule before rerunning the benchmark.
+
+---
+
+## Step 1.14A — Canonical Assembly Fixes for Full Benchmark
+
+### Status
+
+Completed.
+
+### Background
+
+The first full canonical HumanEval-X run produced:
+
+    152 / 164 PASS
+
+with 12 canonical Go problems failing at compile time.
+
+Failed tasks:
+
+    Go/10
+    Go/17
+    Go/20
+    Go/27
+    Go/32
+    Go/38
+    Go/50
+    Go/59
+    Go/75
+    Go/90
+    Go/108
+    Go/162
+
+### Failure Diagnosis
+
+Inspection of the failing HumanEval-X records identified three main assembly issues.
+
+#### Helper functions stored in prompt
+
+Some canonical implementations depend on helper functions defined in the HumanEval-X prompt rather than in declaration or canonical_solution.
+
+Examples:
+
+    Go/10  IsPalindrome
+    Go/32  Poly
+    Go/38  EncodeCyclic
+    Go/50  EncodeShift
+
+The previous source assembly:
+
+    package main
+    + import
+    + declaration
+    + canonical_solution
+
+discarded those helper functions.
+
+### Canonical Source Assembly Change
+
+Canonical source assembly now preserves:
+
+    prompt
+    + canonical_solution
+
+The prompt is stripped of package/import declarations and retained as the source scaffold.
+
+This preserves helper functions required by the target function.
+
+### Missing Standard-Library Imports
+
+Some HumanEval-X records use standard-library packages in canonical_solution despite the dataset import field being empty or incomplete.
+
+Examples included:
+
+    strings
+    math
+    sort
+
+The canonical assembler now detects selector usage such as:
+
+    strings.Split
+    math.Pow
+    sort.Float64s
+
+and infers the corresponding standard-library import when missing.
+
+This logic is used only for canonical benchmark assembly.
+
+It is not used to repair model-generated code.
+
+### Unused Imports
+
+Some dataset records contain imports that are not actually used in the assembled source or test file.
+
+Go treats unused imports as compile errors.
+
+Examples included:
+
+    strings
+    math
+    crypto/md5
+
+The assembler now normalizes imports independently for each file and keeps only imports actually referenced by that file.
+
+### File-Scoped Import Handling
+
+solution.go and solution_test.go now receive independent normalized import sets.
+
+This preserves Go's file-scoped import semantics while avoiding:
+
+- missing imports;
+- duplicate imports;
+- unused imports.
+
+### Additional Dataset Tests
+
+The dataset test suite now covers:
+
+- used source imports;
+- test imports required by test code;
+- unused test imports;
+- duplicate test imports;
+- helper functions preserved from prompt;
+- missing standard-library import inference;
+- unused source import removal;
+- unused test import removal.
+
+### Targeted Canonical Revalidation
+
+Only the 12 previously failing problems were rerun after the assembly changes.
+
+Result:
+
+    Go/10   PASS
+    Go/17   PASS
+    Go/20   PASS
+    Go/27   PASS
+    Go/32   PASS
+    Go/38   PASS
+    Go/50   PASS
+    Go/59   PASS
+    Go/75   PASS
+    Go/90   PASS
+    Go/108  PASS
+    Go/162  PASS
+
+Final result:
+
+    12 / 12 PASS
+
+### Conclusion
+
+All failures from the original 152/164 canonical run are now explained by source/test assembly issues and have been corrected.
+
+No benchmark exclusions are currently required.
+
+### Next Action
+
+Run the complete 164-problem canonical HumanEval-X validation again using the corrected assembler.
