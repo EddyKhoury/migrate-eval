@@ -1,0 +1,4 @@
+# migrateeval
+./solution.go:4:9: undefined: missingValue
+FAIL    migrateeval [build failed]
+FAIL

@@ -1,0 +1,4 @@
+# migrateeval
+./solution.go:5:1: syntax error: unexpected EOF, expected }
+FAIL    migrateeval [build failed]
+FAIL
