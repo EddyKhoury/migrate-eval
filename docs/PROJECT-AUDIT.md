@@ -1823,3 +1823,164 @@ Milestone 1: IN PROGRESS
 ### Next Action
 
 Create a reusable canonical HumanEval-X validator and generalize test-import assembly before running the full benchmark.
+
+---
+
+## Step 1.12 — Reusable Canonical HumanEval-X Validator
+
+### Status
+
+Completed.
+
+### Files Added
+
+    src/migrate_eval/dataset.py
+    scripts/validate_oracle.py
+    tests/test_dataset.py
+
+### Purpose
+
+Replace the temporary manual HumanEval-X assembly commands with reusable project code before running the complete benchmark.
+
+### Dataset Loader
+
+Implemented:
+
+    load_go_problems(path)
+
+The loader reads:
+
+    data/humaneval_x/humaneval_go.jsonl.gz
+
+and returns the HumanEval-X Go problem records.
+
+### Canonical Go Assembly
+
+Implemented:
+
+    build_canonical_go_files(problem)
+
+This constructs:
+
+    solution.go
+    solution_test.go
+
+from the HumanEval-X fields:
+
+    import
+    declaration
+    canonical_solution
+    test_setup
+    test
+
+### Go Import Handling
+
+HumanEval-X exposed an important Go-specific issue:
+
+Go imports are file-scoped.
+
+Some benchmark tests directly reference packages from the problem-level import field, even though those packages are not included in test_setup.
+
+The assembler therefore:
+
+1. Parses problem imports.
+2. Parses imports already present in test_setup.
+3. Detects whether the test references a problem import using:
+
+       package.Symbol
+
+4. Adds only required missing imports to solution_test.go.
+5. Avoids adding unused imports.
+6. Avoids duplicating imports already present in test_setup.
+
+### Unit Tests Added
+
+Added four dataset/assembly tests covering:
+
+- canonical solution receives problem imports;
+- tests receive a problem import when actually used;
+- unused problem imports are not copied into tests;
+- imports already present in test_setup are not duplicated.
+
+Verification:
+
+    python -m pytest tests/test_dataset.py -v
+
+Result:
+
+    4 passed
+
+### Canonical Validator
+
+Created:
+
+    scripts/validate_oracle.py
+
+Supported arguments:
+
+    --dataset
+    --n
+    --timeout
+
+The script:
+
+1. Loads HumanEval-X Go problems.
+2. Builds canonical source/test files.
+3. Executes each through the Docker oracle.
+4. Prints task status and duration.
+5. Prints failures with stdout/stderr.
+6. Produces a final PASS summary.
+7. Returns a non-zero exit code if any selected problem fails.
+
+### Five-Problem Validation
+
+Command:
+
+    python scripts/validate_oracle.py --n 5
+
+Result:
+
+    Go/0 PASS
+    Go/1 PASS
+    Go/2 PASS
+    Go/3 PASS
+    Go/4 PASS
+
+Final result:
+
+    5/5 PASS
+
+### Full Harness Regression
+
+Command:
+
+    make test
+
+Result:
+
+    15 passed in 47.12s
+
+Current harness tests:
+
+    4 dataset tests
+    10 runner tests
+    1 smoke test
+
+### Conclusion
+
+Canonical HumanEval-X assembly is now implemented as reusable project code rather than manual shell experiments.
+
+The oracle is ready to be scaled to the complete HumanEval-X Go benchmark.
+
+## Current Milestone Status
+
+Milestone 1: IN PROGRESS
+
+### Canonical Validation Progress
+
+    Sample: 5/5 PASS
+    Full benchmark: not yet run
+
+### Next Action
+
+Run the canonical validator across all 164 HumanEval-X Go problems and collect the complete oracle validity result.
