@@ -1700,3 +1700,126 @@ Milestone 1: IN PROGRESS
 ### Next Action
 
 Run a small sample of canonical HumanEval-X Go problems to confirm the source/test assembly generalizes beyond Go/0.
+
+---
+
+## Step 1.11 — Small Canonical HumanEval-X Sample
+
+### Status
+
+Completed.
+
+### Goal
+
+Validate the oracle against several canonical HumanEval-X Go solutions before scaling to the full 164-problem benchmark.
+
+### Sample
+
+Problems tested:
+
+    Go/0
+    Go/1
+    Go/2
+    Go/3
+    Go/4
+
+### Initial Result
+
+The first five-problem run produced:
+
+    Go/0 PASS
+    Go/1 PASS
+    Go/2 COMPILE_ERROR
+    Go/3 PASS
+    Go/4 COMPILE_ERROR
+
+Result:
+
+    3/5 PASS
+
+### Cause of Go/2 and Go/4 Failures
+
+The HumanEval-X tests for these problems directly call:
+
+    math.Abs(...)
+
+The problem-level `import` field contains:
+
+    "math"
+
+but Go imports are file-scoped.
+
+Because the solution and tests are written to separate files:
+
+    solution.go
+    solution_test.go
+
+the `math` import in solution.go is not visible to solution_test.go.
+
+### Second Assembly Attempt
+
+The problem imports were copied into every test file.
+
+This fixed Go/2 and Go/4, but caused Go/0 to fail because its test did not use math.
+
+Error:
+
+    "math" imported and not used
+
+Result:
+
+    4/5 PASS
+
+### Final Sample Assembly Rule
+
+For the sample, a problem-level import is added to the test file only when:
+
+- the test actually references that package;
+- the package exists in the problem import field;
+- the package is not already imported by test_setup.
+
+For the observed sample this meant adding:
+
+    import "math"
+
+only when the test contained:
+
+    math.
+
+### Final Result
+
+    Go/0 PASS
+    Go/1 PASS
+    Go/2 PASS
+    Go/3 PASS
+    Go/4 PASS
+
+Result:
+
+    5/5 PASS
+
+### Observed Execution Time
+
+Each fresh Docker execution currently takes approximately:
+
+    16 seconds
+
+The actual Go tests themselves execute in milliseconds; most of the elapsed time is Docker/Go compilation setup.
+
+### Design Conclusion
+
+HumanEval-X Go source and test assembly requires file-aware import handling.
+
+A reusable and general implementation will be created in the next step rather than keeping this temporary sample-specific logic.
+
+## Current Milestone Status
+
+Milestone 1: IN PROGRESS
+
+### Canonical Validation Progress
+
+    Go/0-Go/4: 5/5 PASS
+
+### Next Action
+
+Create a reusable canonical HumanEval-X validator and generalize test-import assembly before running the full benchmark.
