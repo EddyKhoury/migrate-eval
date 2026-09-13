@@ -2801,3 +2801,105 @@ Result:
 Implement Go code extraction from raw model responses.
 
 
+## Step 2.5 — Go Code Extraction
+
+### Status
+
+Completed.
+
+### Files Added
+
+    src/migrate_eval/extract.py
+    tests/test_extract.py
+
+### Implemented
+
+Created:
+
+    go_block(response, package_name="main")
+
+and:
+
+    ExtractionError
+
+The extractor converts raw model responses into Go source code that can later be passed to the Docker oracle.
+
+### Extraction Rules
+
+If one or more Go fenced blocks are present:
+
+    ```go
+    ...
+    ```
+
+the extractor uses the final Go block.
+
+This handles model responses where an initial answer is followed by a corrected implementation.
+
+If no Go fenced block exists, the complete model response is treated as Go source.
+
+### Package Normalization
+
+Any package declaration returned by the model is removed.
+
+The extractor then adds the package required by the evaluation harness:
+
+    package main
+
+This prevents model-generated package names from causing package mismatches with HumanEval-X target tests.
+
+The function also supports an alternate package name through:
+
+    package_name
+
+for future reuse.
+
+### Extraction Failure
+
+If the response is empty, or contains only a package declaration, the extractor raises:
+
+    ExtractionError
+
+The migration pipeline will later convert this failure into the shared status:
+
+    EXTRACT_ERROR
+
+That integration is intentionally deferred until the single-shot migration loop is implemented.
+
+### Tests Added
+
+Verified:
+
+- extraction from a single Go fenced block;
+- selection of the final block when multiple Go blocks exist;
+- extraction from an unfenced response;
+- replacement of an incorrect package declaration;
+- prevention of duplicate package main declarations;
+- custom package-name support;
+- empty-response failure;
+- package-only-response failure.
+
+### Step-Specific Verification
+
+Command:
+
+    python -m pytest tests/test_extract.py -v
+
+Result:
+
+    8 passed
+
+### Next Action
+
+Implement the single-shot migration pipeline with:
+
+    iters=0
+
+The pipeline will connect:
+
+    dataset
+    -> prompt
+    -> model adapter
+    -> extractor
+    -> Docker oracle
+
