@@ -2903,3 +2903,212 @@ The pipeline will connect:
     -> extractor
     -> Docker oracle
 
+## Step 2.6 — Single-Shot Migration Pipeline
+
+### Status
+
+Completed.
+
+### Files Added
+
+    src/migrate_eval/loop.py
+    tests/test_loop.py
+
+### Files Modified
+
+    src/migrate_eval/dataset.py
+    tests/test_dataset.py
+
+### Goal
+
+Connect the components built earlier in Milestone 2 into the first complete Java-to-Go migration path.
+
+This step implements single-shot migration only:
+
+    iters = 0
+
+No repair attempts are performed yet.
+
+### Migration Dataset Representation
+
+Created:
+
+    MigrationProblem
+
+with fields:
+
+    task_id
+    java_code
+    go_signature
+    go_test
+
+The Java and Go HumanEval-X datasets are paired using their shared numeric task index.
+
+Examples:
+
+    Java/0 -> Go/0
+    Java/1 -> Go/1
+
+### Java Dataset Loading
+
+Added:
+
+    load_java_problems(...)
+
+The Java HumanEval-X gzip JSONL file is loaded using the same approach already used by the Go dataset loader.
+
+### Migration Problem Assembly
+
+Added:
+
+    build_migration_problems(...)
+
+The function:
+
+1. pairs Java and Go records by numeric task index;
+2. combines the Java prompt and canonical solution into the source implementation;
+3. uses the Go declaration as the required target signature;
+4. assembles the Go test file;
+5. supports benchmark exclusions.
+
+The known flaky benchmark problem:
+
+    Go/95
+
+can therefore remain excluded from migration evaluation.
+
+### Dataset Validation
+
+Added tests covering:
+
+- Java/Go pairing by task index;
+- preservation of Java source;
+- preservation of Go signature and tests;
+- exclusion of requested benchmark tasks;
+- rejection of mismatched Java and Go task sets.
+
+Dataset-specific verification:
+
+    12 passed
+
+### Single-Shot Migration Orchestration
+
+Created:
+
+    migrate_once(...)
+
+The migration path is:
+
+    MigrationProblem
+        ->
+    initial migration prompt
+        ->
+    ModelAdapter.complete(...)
+        ->
+    Go extraction
+        ->
+    Docker Go oracle
+        ->
+    MigrationAttempt
+
+### MigrationAttempt
+
+Created:
+
+    MigrationAttempt
+
+It records:
+
+    task_id
+    model_name
+    prompt
+    raw_response
+    go_code
+    run_result
+
+This provides the information that later result logging will persist to JSONL.
+
+### Failure Handling
+
+Model exceptions are converted into:
+
+    MODEL_ERROR
+
+Extraction failures are converted into:
+
+    EXTRACT_ERROR
+
+In both cases, the Docker runner is not executed.
+
+Failures returned by the Go oracle are preserved unchanged, including:
+
+    COMPILE_ERROR
+    TEST_FAIL
+    TIMEOUT
+
+### Mocked Pipeline Tests
+
+Verified:
+
+- successful single-shot migration;
+- prompt reaches the model exactly once;
+- extracted Go reaches the runner;
+- model failure becomes MODEL_ERROR;
+- extraction failure becomes EXTRACT_ERROR;
+- runner failure status is preserved.
+
+### Real Docker Integration Test
+
+A fake model returned a valid Go implementation while the real Docker oracle was used.
+
+Full path exercised:
+
+    FakeModel
+        ->
+    prompt
+        ->
+    extraction
+        ->
+    run_go_tests
+        ->
+    Docker
+        ->
+    go test
+        ->
+    PASS
+
+Command:
+
+    python -m pytest tests/test_loop.py -v
+
+Result:
+
+    5 passed
+
+Observed integration runtime:
+
+    8.89 seconds
+
+### Design Decision
+
+The model and runner are injectable.
+
+This allows unit tests to stay fast and offline while still permitting dedicated integration tests against the real Docker oracle.
+
+No real OpenAI or Ollama request is required for pytest.
+
+### Milestone 2 Progress
+
+Completed:
+
+- Step 2.1 — ModelAdapter contract
+- Step 2.2 — OpenAI adapter
+- Step 2.3 — Ollama adapter
+- Step 2.4 — Initial migration prompt
+- Step 2.5 — Go code extractor
+- Step 2.6 — Single-shot migration pipeline
+
+### Next Action
+
+Implement JSONL result logging and the command-line interface for running single-shot migration experiments.
+

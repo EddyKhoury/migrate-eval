@@ -9,6 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+@dataclass(frozen=True)
+class MigrationProblem:
+    """One paired Java-to-Go HumanEval-X migration problem."""
+
+    task_id: str
+    java_code: str
+    go_signature: str
+    go_test: str
 
 @dataclass(frozen=True)
 class GoImport:
@@ -65,6 +73,74 @@ _SCAN_IGNORED_RE = re.compile(
     re.DOTALL,
 )
 
+def load_java_problems(
+    path: str | Path,
+) -> list[dict[str, Any]]:
+    """Load HumanEval-X Java JSONL.GZ records."""
+
+    path = Path(path)
+
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        return [json.loads(line) for line in f]
+
+
+def _task_index(task_id: str) -> str:
+    """Return the shared numeric HumanEval-X task index."""
+
+    return task_id.split("/", maxsplit=1)[1]
+
+
+def build_migration_problems(
+    java_problems,
+    go_problems,
+    *,
+    excluded_task_ids=None,
+):
+    """Pair HumanEval-X Java source with Go signatures and tests."""
+
+    excluded = set(excluded_task_ids or [])
+
+    java_by_index = {
+        _task_index(problem["task_id"]): problem
+        for problem in java_problems
+    }
+
+    go_by_index = {
+        _task_index(problem["task_id"]): problem
+        for problem in go_problems
+    }
+
+    if java_by_index.keys() != go_by_index.keys():
+        raise ValueError("Java and Go HumanEval-X task sets do not match")
+
+    migration_problems = []
+
+    for index in sorted(java_by_index, key=int):
+        java_problem = java_by_index[index]
+        go_problem = go_by_index[index]
+
+        go_task_id = go_problem["task_id"]
+
+        if go_task_id in excluded:
+            continue
+
+        java_code = (
+            java_problem["prompt"]
+            + java_problem["canonical_solution"]
+        ).strip()
+
+        _, go_test = build_canonical_go_files(go_problem)
+
+        migration_problems.append(
+            MigrationProblem(
+                task_id=go_task_id,
+                java_code=java_code,
+                go_signature=go_problem["declaration"].strip(),
+                go_test=go_test,
+            )
+        )
+
+    return migration_problems
 
 def load_go_problems(path: str | Path) -> list[dict[str, Any]]:
     """Load HumanEval-X Go JSONL.GZ records."""
