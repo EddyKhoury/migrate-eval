@@ -2595,3 +2595,106 @@ Result:
 
 Implement the local Ollama model adapter using the same ModelAdapter interface.
 
+
+## Step 2.3 — Ollama Model Adapter
+
+### Status
+
+Completed.
+
+### Files Added
+
+```
+src/migrate_eval/models/ollama_adapter.py
+tests/test_ollama_adapter.py
+```
+
+### Implemented
+
+Created:
+
+```
+OllamaAdapter
+```
+
+The adapter implements the shared ModelAdapter contract introduced in Step 2.1.
+
+The adapter exposes:
+
+```
+name
+complete(prompt: str) -> str
+```
+
+and communicates with the local Ollama HTTP API.
+
+### Adapter Behavior
+
+The adapter:
+
+* accepts the Ollama model name as configuration;
+* uses the local Ollama API endpoint;
+* disables streaming so each completion returns one complete response;
+* uses temperature 0.0 by default;
+* uses a fixed seed for improved reproducibility;
+* supports dependency injection of the HTTP client;
+* records completion latency;
+* reads Ollama input/output token counts when available;
+* retries temporary failures with exponential backoff;
+* retries HTTP 429 and server-side 5xx responses;
+* retries timeout and network errors;
+* returns the raw generated response text.
+
+### Naming Convention
+
+Models are exposed to the evaluation pipeline as:
+
+```
+ollama:<model>
+```
+
+For the local benchmark model this will later be:
+
+```
+ollama:qwen2.5-coder:14b
+```
+
+### Testing Strategy
+
+Pytest does not call the real Ollama service.
+
+A fake HTTP client is injected into the adapter so tests remain:
+
+* deterministic;
+* fast;
+* offline;
+* independent of whether Ollama is currently running.
+
+### Tests Added
+
+Verified that:
+
+* OllamaAdapter satisfies the ModelAdapter protocol;
+* the adapter returns generated response text;
+* the expected request payload is sent;
+* deterministic generation settings are included;
+* temporary server failures are retried correctly.
+
+### Step-Specific Verification
+
+Command:
+
+```
+python -m pytest tests/test_ollama_adapter.py -v
+```
+
+Result:
+
+```
+4 passed
+```
+
+### Next Action
+
+Implement the initial Java-to-Go migration prompt.
+
