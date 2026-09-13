@@ -4362,3 +4362,300 @@ Run the complete harness regression suite.
 
 If all tests pass, commit Step 3.4 before starting the real repair evaluation.
 
+## Step 3.5 — Real Repair-Loop Evaluation
+
+### Status
+
+Completed.
+
+### Goal
+
+Evaluate the Milestone 3 repair loop on the same first 20 usable HumanEval-X Java-to-Go problems used for the Milestone 2 single-shot evaluation.
+
+Both configured models were evaluated with:
+
+    --n 20
+    --iters 3
+
+Iteration 0 is the initial migration.
+
+Iterations 1–3 are repair rounds.
+
+The loop stops immediately when a problem passes.
+
+---
+
+### Qwen Repair Evaluation
+
+Model:
+
+    ollama:qwen2.5-coder:14b
+
+Command:
+
+    migrate-eval run \
+      --model ollama:qwen2.5-coder:14b \
+      --n 20 \
+      --iters 3
+
+Results:
+
+    iteration 0: 15/20 PASS — 75.0%
+    iteration 1: 16/20 PASS — 80.0%
+    iteration 2: 16/20 PASS — 80.0%
+    iteration 3: 16/20 PASS — 80.0%
+
+Repair improvement within this run:
+
+    75.0% -> 80.0%
+
+Absolute improvement:
+
+    +5 percentage points
+
+Additional problems repaired:
+
+    1
+
+Successful repair:
+
+    Go/4
+    PASS at iteration 1
+
+Residual failures after iteration 3:
+
+    Go/7   TEST_FAIL
+    Go/10  COMPILE_ERROR
+    Go/12  COMPILE_ERROR
+    Go/16  TEST_FAIL
+
+The previous Milestone 2 single-shot Qwen run produced:
+
+    14/20
+    70.0%
+
+The iteration-0 result in the repair evaluation was instead:
+
+    15/20
+    75.0%
+
+Because local model execution may vary between runs, repair improvement is measured primarily within the same repair run:
+
+    75.0% -> 80.0%
+
+Result file:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260913T154621Z-47577885.jsonl
+
+Metadata file:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260913T154621Z-47577885.meta.json
+
+---
+
+### GPT-5.6 Terra Repair Evaluation
+
+Model:
+
+    openai:gpt-5.6-terra
+
+Command:
+
+    migrate-eval run \
+      --model openai:gpt-5.6-terra \
+      --n 20 \
+      --iters 3
+
+Results:
+
+    iteration 0: 18/20 PASS — 90.0%
+    iteration 1: 19/20 PASS — 95.0%
+    iteration 2: 20/20 PASS — 100.0%
+    iteration 3: 20/20 PASS — 100.0%
+
+Repair improvement within this run:
+
+    90.0% -> 100.0%
+
+Absolute improvement:
+
+    +10 percentage points
+
+Both initial failures were repaired.
+
+Successful repairs:
+
+    Go/16
+    PASS at iteration 1
+
+    Go/2
+    PASS at iteration 2
+
+No residual failures remained after iteration 2.
+
+The iteration-0 result exactly reproduced the previous Milestone 2 GPT-5.6 Terra baseline:
+
+    18/20
+    90.0%
+
+Result file:
+
+    results/openai__gpt-5.6-terra/
+    20260913T160413Z-40bbd5c5.jsonl
+
+Metadata file:
+
+    results/openai__gpt-5.6-terra/
+    20260913T160413Z-40bbd5c5.meta.json
+
+---
+
+### Model Comparison
+
+Repair-run cumulative pass rates:
+
+| Model | Iteration 0 | Iteration 1 | Iteration 2 | Iteration 3 |
+|---|---:|---:|---:|---:|
+| qwen2.5-coder:14b | 75.0% | 80.0% | 80.0% | 80.0% |
+| gpt-5.6-terra | 90.0% | 95.0% | 100.0% | 100.0% |
+
+Within-run improvement:
+
+    qwen2.5-coder:14b
+    +5 percentage points
+
+    gpt-5.6-terra
+    +10 percentage points
+
+### Repair Effectiveness
+
+Qwen initial failures:
+
+    5
+
+Qwen failures repaired:
+
+    1 / 5
+    20%
+
+GPT-5.6 Terra initial failures:
+
+    2
+
+GPT-5.6 Terra failures repaired:
+
+    2 / 2
+    100%
+
+These values describe only this 20-problem sample and are not yet the final full-benchmark results.
+
+---
+
+### Saved Repair Trace
+
+A complete real repair trace was preserved for:
+
+    Go/2
+    openai:gpt-5.6-terra
+
+Trace:
+
+    iteration 0 — COMPILE_ERROR
+    iteration 1 — TEST_FAIL
+    iteration 2 — PASS
+
+Iteration 0 generated:
+
+    number % 1.0
+
+Go rejected the floating-point remainder operator.
+
+Iteration 1 repaired compilation using:
+
+    math.Trunc(number)
+
+The code compiled, but the tests showed a semantic error:
+
+    expected 0.5
+    actual 3
+
+Iteration 2 repaired the behavior using:
+
+    math.Modf(number)
+
+The target-language test suite then passed.
+
+Permanent trace documentation:
+
+    docs/repair-traces/gpt-5.6-terra-go2.md
+
+This trace is a strong demonstration of the repair-loop design because it shows:
+
+    compiler feedback
+        ->
+    compilation repair
+        ->
+    behavioral test feedback
+        ->
+    semantic repair
+        ->
+    PASS
+
+---
+
+# Milestone 3 — Repair Loop
+
+## Status
+
+COMPLETED.
+
+### Completed
+
+- repair prompt;
+- compiler/test feedback injection;
+- 60-line feedback truncation;
+- iterative repair orchestration;
+- early stopping on PASS;
+- configurable repair limit;
+- iteration tracking;
+- MODEL_ERROR / EXTRACT_ERROR handling;
+- JSONL logging of every attempt;
+- per-run metadata;
+- prompt configuration hashing;
+- CLI support for --iters;
+- cumulative pass reporting by iteration;
+- real 20-problem Qwen evaluation;
+- real 20-problem GPT-5.6 Terra evaluation;
+- real FAIL -> repair -> PASS trace preserved.
+
+### Milestone 3 Exit Results
+
+Qwen:
+
+    iteration 0: 75.0%
+    iteration 3: 80.0%
+
+GPT-5.6 Terra:
+
+    iteration 0: 90.0%
+    iteration 3: 100.0%
+
+The repair loop improved pass rate for both evaluated models on the 20-problem sample.
+
+### Next Milestone
+
+Milestone 4 — Full Evaluation
+
+Main objectives:
+
+- run the validated benchmark set across both models;
+- aggregate JSONL results;
+- report pass rate by iteration and model;
+- analyze failure taxonomy;
+- generate evaluation plots;
+- prepare results for the README.
+
+Milestone 4 must begin in a new chat.
+
