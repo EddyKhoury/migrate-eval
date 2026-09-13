@@ -4659,3 +4659,235 @@ Main objectives:
 
 Milestone 4 must begin in a new chat.
 
+
+# Milestone 4 — Full Evaluation
+
+## Goal
+
+Run the validated HumanEval-X Java-to-Go benchmark across the configured models, aggregate the results, analyze repair effectiveness and failure taxonomy, and generate the final evaluation tables and plots required for the README.
+
+Validated benchmark set:
+
+    163 problems
+
+Excluded benchmark item:
+
+    Go/95
+
+Reason:
+
+    canonical HumanEval-X Go implementation is nondeterministic because it depends on unspecified Go map iteration order.
+
+---
+
+## Step 4.1 — Model Telemetry Persistence
+
+### Status
+
+Completed.
+
+### Goal
+
+Ensure the full Milestone 4 evaluation persists model-call latency and token usage before running the complete 163-problem benchmark.
+
+The Milestone 4 analysis requires:
+
+- mean model latency;
+- mean input tokens;
+- mean output tokens.
+
+The model adapters already observed these values during execution, but prior JSONL result records did not preserve them.
+
+Running the full evaluation before fixing this would have lost telemetry required for later aggregation.
+
+### Files Modified
+
+    src/migrate_eval/models/openai_adapter.py
+    src/migrate_eval/models/ollama_adapter.py
+    src/migrate_eval/loop.py
+    src/migrate_eval/results.py
+    tests/test_openai_adapter.py
+    tests/test_ollama_adapter.py
+    tests/test_loop.py
+    tests/test_results.py
+
+### OpenAI Token Telemetry
+
+OpenAIAdapter now exposes the token usage from its most recent successful completion through:
+
+    last_input_tokens
+    last_output_tokens
+
+These values are populated from the OpenAI Responses API usage fields:
+
+    input_tokens
+    output_tokens
+
+They are reset before every new completion so stale telemetry cannot be reused accidentally.
+
+### Ollama Token Telemetry
+
+OllamaAdapter now exposes the same normalized attributes:
+
+    last_input_tokens
+    last_output_tokens
+
+The values are populated from Ollama response fields:
+
+    prompt_eval_count
+    eval_count
+
+Using the same attribute names across adapters allows the migration loop to persist token telemetry without provider-specific logic.
+
+### Model Latency
+
+Model-call duration is measured centrally in:
+
+    loop.py
+
+using:
+
+    time.perf_counter()
+
+The timer wraps:
+
+    model.complete(prompt)
+
+This means model latency is captured consistently for:
+
+- OpenAI;
+- Ollama;
+- future ModelAdapter implementations;
+- MODEL_ERROR attempts.
+
+### MigrationAttempt Telemetry
+
+MigrationAttempt now records:
+
+    model_duration
+    input_tokens
+    output_tokens
+
+Default values preserve compatibility with existing mocked adapters and older test construction:
+
+    model_duration = 0.0
+    input_tokens = None
+    output_tokens = None
+
+### Duration Semantics
+
+The existing JSONL field:
+
+    duration
+
+continues to represent:
+
+    Go Docker oracle/test execution duration
+
+The new field:
+
+    model_duration
+
+represents:
+
+    LLM completion latency
+
+These values are intentionally kept separate so later evaluation can distinguish model generation time from target-language test execution time.
+
+### JSONL Persistence
+
+Every new migration-attempt record now contains:
+
+    model_duration
+    input_tokens
+    output_tokens
+
+alongside the existing fields:
+
+    task_id
+    model
+    iteration
+    prompt
+    raw_response
+    go_code
+    status
+    stdout
+    stderr
+    duration
+
+### Failure Behavior
+
+If the model call itself raises an exception:
+
+    MODEL_ERROR
+
+the elapsed model-call duration is still recorded.
+
+Token counts remain unavailable in that case unless the provider supplied them before failing.
+
+### Tests Added
+
+OpenAI adapter:
+
+- verifies input/output token counts are retained after a successful completion.
+
+Ollama adapter:
+
+- verifies prompt/evaluation token counts are mapped to the normalized telemetry attributes.
+
+Migration loop:
+
+- verifies model latency and token usage propagate into MigrationAttempt.
+
+Results persistence:
+
+- verifies telemetry fields are written into the JSONL-compatible result record.
+
+### Step-Specific Verification
+
+Command:
+
+    python -m pytest \
+      tests/test_openai_adapter.py \
+      tests/test_ollama_adapter.py \
+      tests/test_loop.py \
+      tests/test_results.py \
+      -v
+
+Result:
+
+    32 passed
+
+### Full Harness Regression
+
+Command:
+
+    make test
+
+Result:
+
+    79 passed
+
+No existing Milestone 0–3 behavior was broken.
+
+### Milestone 4 Progress
+
+Completed:
+
+- Step 4.1 — Model telemetry persistence
+
+Not yet completed:
+
+- full-evaluation preflight and API cost protection;
+- full 163-problem OpenAI evaluation;
+- full 163-problem Ollama evaluation;
+- JSONL aggregation;
+- pass rate by iteration and model;
+- failure taxonomy analysis;
+- mean latency/token analysis;
+- evaluation plots.
+
+### Next Action
+
+Commit Step 4.1 before beginning the full-evaluation preflight and cost-safety work.
+

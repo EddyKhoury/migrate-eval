@@ -31,6 +31,9 @@ class OllamaAdapter:
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
 
+        self.last_input_tokens: int | None = None
+        self.last_output_tokens: int | None = None
+
         self._client = client or httpx.Client(
             base_url=base_url,
             timeout=timeout,
@@ -38,6 +41,9 @@ class OllamaAdapter:
 
     def complete(self, prompt: str) -> str:
         """Generate one completion and return its raw text."""
+
+        self.last_input_tokens = None
+        self.last_output_tokens = None
 
         payload = {
             "model": self.model,
@@ -61,6 +67,13 @@ class OllamaAdapter:
 
                 data = response.json()
                 duration = time.perf_counter() - start
+
+                self.last_input_tokens = data.get(
+                    "prompt_eval_count"
+                )
+                self.last_output_tokens = data.get(
+                    "eval_count"
+                )
 
                 logger.info(
                     "Ollama completion model=%s latency=%.3fs "

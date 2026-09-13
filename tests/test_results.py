@@ -279,3 +279,29 @@ def test_write_run_metadata_writes_reproducibility_config(
     )
 
     assert "created_at_utc" in metadata
+
+
+def test_attempt_to_record_persists_model_telemetry():
+    attempt = MigrationAttempt(
+        task_id="Go/0",
+        model_name="fake-model",
+        prompt="migration prompt",
+        raw_response="raw response",
+        go_code="package main\n",
+        run_result=RunResult(
+            status=RunStatus.PASS,
+            stdout="ok",
+            stderr="",
+            duration=0.25,
+        ),
+        iteration=1,
+        model_duration=2.5,
+        input_tokens=120,
+        output_tokens=45,
+    )
+
+    record = attempt_to_record(attempt)
+
+    assert record["model_duration"] == 2.5
+    assert record["input_tokens"] == 120
+    assert record["output_tokens"] == 45

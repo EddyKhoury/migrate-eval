@@ -82,3 +82,15 @@ def test_openai_adapter_sends_temperature_when_configured():
             "temperature": 0.0,
         }
     ]
+
+
+def test_openai_adapter_records_token_usage():
+    adapter = OpenAIAdapter(
+        model="test-model",
+        client=FakeOpenAIClient(),
+    )
+
+    adapter.complete("migrate this code")
+
+    assert adapter.last_input_tokens == 25
+    assert adapter.last_output_tokens == 10

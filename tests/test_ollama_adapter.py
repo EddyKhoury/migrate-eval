@@ -132,3 +132,15 @@ def test_ollama_adapter_retries_server_error(monkeypatch):
 
     assert result == "generated Go code"
     assert len(client.calls) == 2
+
+
+def test_ollama_adapter_records_token_usage():
+    adapter = OllamaAdapter(
+        model="test-model",
+        client=FakeClient([successful_response()]),
+    )
+
+    adapter.complete("migrate this code")
+
+    assert adapter.last_input_tokens == 25
+    assert adapter.last_output_tokens == 10

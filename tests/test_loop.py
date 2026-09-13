@@ -467,3 +467,38 @@ def test_migrate_rejects_negative_iteration_count():
         assert str(exc) == "iters must be >= 0"
     else:
         raise AssertionError("Expected ValueError")
+
+
+def test_migrate_once_records_model_telemetry():
+    problem = make_problem()
+
+    model = FakeModel(
+        response=(
+            "```go\n"
+            "func Add(a int, b int) int {\n"
+            "    return a + b\n"
+            "}\n"
+            "```"
+        )
+    )
+
+    model.last_input_tokens = 42
+    model.last_output_tokens = 17
+
+    def fake_runner(*, go_code: str, go_test: str) -> RunResult:
+        return RunResult(
+            status=RunStatus.PASS,
+            stdout="ok",
+            stderr="",
+            duration=0.1,
+        )
+
+    attempt = migrate_once(
+        problem,
+        model,
+        runner=fake_runner,
+    )
+
+    assert attempt.model_duration >= 0.0
+    assert attempt.input_tokens == 42
+    assert attempt.output_tokens == 17

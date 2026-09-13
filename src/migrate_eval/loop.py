@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -23,6 +24,9 @@ class MigrationAttempt:
     go_code: str | None
     run_result: RunResult
     iteration: int = 0
+    model_duration: float = 0.0
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 Runner = Callable[..., RunResult]
@@ -38,9 +42,13 @@ def _execute_prompt(
 ) -> MigrationAttempt:
     """Execute one model -> extraction -> oracle attempt."""
 
+    model_start = time.perf_counter()
+
     try:
         raw_response = model.complete(prompt)
     except Exception as exc:
+        model_duration = time.perf_counter() - model_start
+
         return MigrationAttempt(
             task_id=problem.task_id,
             model_name=model.name,
@@ -54,7 +62,21 @@ def _execute_prompt(
                 duration=0.0,
             ),
             iteration=iteration,
+            model_duration=model_duration,
         )
+
+    model_duration = time.perf_counter() - model_start
+
+    input_tokens = getattr(
+        model,
+        "last_input_tokens",
+        None,
+    )
+    output_tokens = getattr(
+        model,
+        "last_output_tokens",
+        None,
+    )
 
     try:
         go_code = go_block(raw_response)
@@ -72,6 +94,9 @@ def _execute_prompt(
                 duration=0.0,
             ),
             iteration=iteration,
+            model_duration=model_duration,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     run_result = runner(
@@ -87,6 +112,9 @@ def _execute_prompt(
         go_code=go_code,
         run_result=run_result,
         iteration=iteration,
+        model_duration=model_duration,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )
 
 

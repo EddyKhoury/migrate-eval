@@ -24,6 +24,9 @@ class OpenAIAdapter:
         self.name = f"openai:{model}"
         self.temperature = temperature
 
+        self.last_input_tokens: int | None = None
+        self.last_output_tokens: int | None = None
+
         self._client = client
         self._max_retries = max_retries
         self._timeout = timeout
@@ -41,6 +44,9 @@ class OpenAIAdapter:
 
     def complete(self, prompt: str) -> str:
         """Generate one completion and return its raw text."""
+
+        self.last_input_tokens = None
+        self.last_output_tokens = None
 
         client = self._get_client()
 
@@ -71,6 +77,9 @@ class OpenAIAdapter:
             "output_tokens",
             None,
         )
+
+        self.last_input_tokens = input_tokens
+        self.last_output_tokens = output_tokens
 
         logger.info(
             "OpenAI completion model=%s latency=%.3fs "
