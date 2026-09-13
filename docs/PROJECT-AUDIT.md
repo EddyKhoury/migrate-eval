@@ -2698,3 +2698,106 @@ Result:
 
 Implement the initial Java-to-Go migration prompt.
 
+## Step 2.4 — Initial Java-to-Go Migration Prompt
+
+### Status
+
+Completed.
+
+### Files Added
+
+```
+src/migrate_eval/prompts.py
+tests/test_prompts.py
+```
+
+### Implemented
+
+Created:
+
+```
+initial(java_code, go_signature)
+```
+
+The function builds the initial Java-to-Go migration prompt used for single-shot model evaluation.
+
+### Prompt Inputs
+
+The prompt contains:
+
+* the Java implementation;
+* the exact Go function signature that must be implemented.
+
+### Prompt Requirements
+
+The model is instructed to:
+
+* preserve the behavior of the Java implementation;
+* implement exactly the supplied Go signature;
+* return only one Go code block;
+* not include tests;
+* not include a main function;
+* not include explanations;
+* use package main.
+
+### Evaluation Integrity
+
+The prompt does not expose:
+
+* the canonical Go solution;
+* the HumanEval-X Go tests.
+
+This prevents benchmark answer leakage and ensures the model must perform the migration from the Java implementation.
+
+### Design Decision
+
+The prompt template is stored as a plain Python string constant:
+
+```
+INITIAL_PROMPT_TEMPLATE
+```
+
+This keeps the benchmark prompt visible, inspectable, and easy to document later in the README.
+
+### Tests Added
+
+Verified that the generated prompt contains:
+
+* the Java implementation;
+* the required Go signature;
+* the code-only output instruction;
+* the no-tests instruction;
+* the no-main instruction;
+* the package main requirement.
+
+### Problem Encountered
+
+The first version of prompts.py was accidentally pasted incompletely.
+
+Python reported:
+
+```
+SyntaxError: unterminated triple-quoted string literal
+```
+
+The prompt template was replaced with the complete version and the tests then passed successfully.
+
+### Step-Specific Verification
+
+Command:
+
+```
+python -m pytest tests/test_prompts.py -v
+```
+
+Result:
+
+```
+4 passed
+```
+
+### Next Action
+
+Implement Go code extraction from raw model responses.
+
+
