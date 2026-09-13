@@ -14,7 +14,7 @@ from migrate_eval.dataset import (
     load_go_problems,
     load_java_problems,
 )
-from migrate_eval.loop import migrate_once
+from migrate_eval.loop import migrate
 from migrate_eval.models.base import ModelAdapter
 from migrate_eval.models.ollama_adapter import OllamaAdapter
 from migrate_eval.models.openai_adapter import OpenAIAdapter
@@ -160,13 +160,7 @@ def run(
         "--results-dir",
     ),
 ) -> None:
-    """Run a single-shot Java-to-Go migration evaluation."""
-
-    if iters != 0:
-        raise typer.BadParameter(
-            "Milestone 3 metadata step "
-            "currently supports only --iters 0"
-        )
+    """Run a Java-to-Go migration evaluation with optional repairs."""
 
     load_dotenv()
 
@@ -240,50 +234,70 @@ def run(
         prompt_hash=_current_prompt_hash(),
     )
 
-    passes = 0
+    attempts_by_problem = []
 
     for position, problem in enumerate(
         selected,
         start=1,
     ):
-        attempt = migrate_once(
+        attempts = migrate(
             problem,
             adapter,
+            iters=iters,
         )
 
-        append_attempt(
-            output_path,
-            attempt,
+        attempts_by_problem.append(
+            attempts
         )
 
-        if (
-            attempt.run_result.status
-            is RunStatus.PASS
-        ):
-            passes += 1
+        for attempt in attempts:
+            append_attempt(
+                output_path,
+                attempt,
+            )
+
+        final_attempt = attempts[-1]
 
         typer.echo(
             f"[{position}/{len(selected)}] "
             f"{problem.task_id} "
-            f"{attempt.run_result.status.value}"
+            f"{final_attempt.run_result.status.value} "
+            f"(iteration {final_attempt.iteration})"
         )
 
-    pass_rate = (
-        passes
-        / len(selected)
-    )
-
     typer.echo("")
-
     typer.echo(
         f"Model: {adapter.name}"
     )
 
-    typer.echo(
-        f"pass@1: "
-        f"{passes}/{len(selected)} "
-        f"({pass_rate:.1%})"
-    )
+    for iteration in range(
+        iters + 1
+    ):
+        passes = 0
+
+        for attempts in attempts_by_problem:
+            passed_by_iteration = any(
+                (
+                    attempt.run_result.status
+                    is RunStatus.PASS
+                )
+                and attempt.iteration <= iteration
+                for attempt in attempts
+            )
+
+            if passed_by_iteration:
+                passes += 1
+
+        pass_rate = (
+            passes
+            / len(selected)
+        )
+
+        typer.echo(
+            f"pass@1 iteration {iteration}: "
+            f"{passes}/{len(selected)} "
+            f"({pass_rate:.1%})"
+        )
 
     typer.echo(
         f"Results: {output_path}"

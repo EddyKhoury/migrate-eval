@@ -4188,3 +4188,177 @@ Run the complete harness regression suite.
 
 If all tests pass, commit Step 3.3 before enabling repair iterations through the CLI.
 
+## Step 3.4 — CLI Repair-Loop Integration
+
+### Status
+
+Completed.
+
+### Files Modified
+
+    src/migrate_eval/cli.py
+    tests/test_cli.py
+
+### Goal
+
+Connect the repair-loop orchestration implemented in Step 3.2 to the command-line interface.
+
+The CLI can now execute:
+
+    iteration 0
+    repair iteration 1
+    repair iteration 2
+    repair iteration 3
+
+depending on the value supplied through:
+
+    --iters
+
+### CLI Execution Change
+
+The CLI previously executed:
+
+    migrate_once(...)
+
+for every benchmark problem.
+
+It now executes:
+
+    migrate(
+        problem,
+        adapter,
+        iters=iters,
+    )
+
+This allows the command-line evaluation path to use the repair loop.
+
+### Iteration Semantics
+
+The CLI follows the repair-loop convention:
+
+    --iters 0
+
+means:
+
+    initial migration only
+
+while:
+
+    --iters 3
+
+allows:
+
+    iteration 0
+    iteration 1
+    iteration 2
+    iteration 3
+
+for a maximum of four attempts per problem.
+
+The repair loop stops early when a problem passes.
+
+### Attempt Persistence
+
+Every generated attempt is appended to the run JSONL file.
+
+For example, a problem that fails initially and succeeds on the first repair produces two records:
+
+    iteration 0 — TEST_FAIL
+    iteration 1 — PASS
+
+A problem that passes immediately produces only:
+
+    iteration 0 — PASS
+
+### Cumulative Pass Reporting
+
+The CLI now reports cumulative pass rate for each allowed iteration.
+
+A problem counts as passing at iteration N if it passed during any attempt from:
+
+    iteration 0 through iteration N
+
+For example:
+
+    iteration 0: 1/2 PASS
+    iteration 1: 2/2 PASS
+    iteration 2: 2/2 PASS
+    iteration 3: 2/2 PASS
+
+This matches the benchmark metric used for measuring improvement from repair rounds.
+
+### Per-Problem Output
+
+The CLI reports each problem's final status and the iteration at which execution stopped.
+
+Example:
+
+    Go/0 PASS (iteration 0)
+    Go/1 PASS (iteration 1)
+
+### Metadata
+
+The metadata implementation from Step 3.3 remains active.
+
+The selected:
+
+    --iters
+
+value is stored in:
+
+    <run_id>.meta.json
+
+alongside model, prompt hash, task IDs, exclusions, and model configuration.
+
+### Backward Compatibility
+
+Single-shot evaluation remains supported:
+
+    --iters 0
+
+This preserves the Milestone 2 evaluation behavior while using the same general migration-loop interface.
+
+### Tests
+
+CLI tests verify:
+
+- adapter selection still works;
+- unknown model providers are rejected;
+- single-shot runs still work with --iters 0;
+- repair runs accept --iters 3;
+- every attempt is written to JSONL;
+- iteration numbers are preserved;
+- repair success is reflected in final task output;
+- cumulative pass rate is reported correctly;
+- metadata records the configured repair count.
+
+### Step-Specific Verification
+
+Command:
+
+    python -m pytest tests/test_cli.py -v
+
+Result:
+
+    5 passed
+
+### Milestone 3 Progress
+
+Completed:
+
+- Step 3.1 — Repair prompt
+- Step 3.2 — Repair loop orchestration
+- Step 3.3 — Run metadata and reproducibility
+- Step 3.4 — CLI repair-loop integration
+
+Remaining:
+
+- Step 3.5 — Real repair-loop evaluation on the same 20 benchmark problems used in Milestone 2
+- Save at least one real FAIL -> repair -> PASS trace
+
+### Next Action
+
+Run the complete harness regression suite.
+
+If all tests pass, commit Step 3.4 before starting the real repair evaluation.
+

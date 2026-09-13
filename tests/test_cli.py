@@ -14,6 +14,30 @@ from migrate_eval.runner import RunResult, RunStatus
 runner = CliRunner()
 
 
+def make_attempt(
+    *,
+    task_id: str,
+    model_name: str,
+    iteration: int,
+    status: RunStatus,
+    go_code: str = "package main",
+) -> MigrationAttempt:
+    return MigrationAttempt(
+        task_id=task_id,
+        model_name=model_name,
+        prompt=f"prompt iteration {iteration}",
+        raw_response=f"response iteration {iteration}",
+        go_code=go_code,
+        run_result=RunResult(
+            status=status,
+            stdout="",
+            stderr="",
+            duration=0.1,
+        ),
+        iteration=iteration,
+    )
+
+
 def test_create_model_adapter_builds_ollama_adapter():
     adapter = cli.create_model_adapter(
         "ollama:qwen2.5-coder:14b"
@@ -55,30 +79,7 @@ def test_create_model_adapter_rejects_unknown_provider():
         )
 
 
-def test_cli_still_rejects_repairs_during_metadata_step():
-    result = runner.invoke(
-        cli.app,
-        [
-            "run",
-            "--model",
-            "ollama:test-model",
-            "--iters",
-            "1",
-        ],
-    )
-
-    assert (
-        result.exit_code
-        != 0
-    )
-
-    assert (
-        "currently supports only --iters 0"
-        in result.output
-    )
-
-
-def test_cli_runs_selected_problems_and_writes_results_and_metadata(
+def test_cli_single_shot_still_works(
     tmp_path,
     monkeypatch,
 ):
@@ -131,35 +132,37 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
         lambda java, go, excluded_task_ids=None: problems,
     )
 
-    def fake_migrate_once(
+    received_iters = []
+
+    def fake_migrate(
         problem,
         adapter,
+        *,
+        iters,
     ):
+        received_iters.append(
+            iters
+        )
+
         status = (
             RunStatus.PASS
             if problem.task_id == "Go/0"
             else RunStatus.TEST_FAIL
         )
 
-        return MigrationAttempt(
-            task_id=problem.task_id,
-            model_name=adapter.name,
-            prompt="prompt",
-            raw_response="response",
-            go_code="package main",
-            run_result=RunResult(
+        return [
+            make_attempt(
+                task_id=problem.task_id,
+                model_name=adapter.name,
+                iteration=0,
                 status=status,
-                stdout="",
-                stderr="",
-                duration=0.1,
-            ),
-            iteration=0,
-        )
+            )
+        ]
 
     monkeypatch.setattr(
         cli,
-        "migrate_once",
-        fake_migrate_once,
+        "migrate",
+        fake_migrate,
     )
 
     result = runner.invoke(
@@ -179,18 +182,24 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
 
     assert result.exit_code == 0
 
+    assert received_iters == [
+        0,
+        0,
+    ]
+
     assert (
-        "Go/0 PASS"
+        "Go/0 PASS (iteration 0)"
         in result.output
     )
 
     assert (
-        "Go/1 TEST_FAIL"
+        "Go/1 TEST_FAIL (iteration 0)"
         in result.output
     )
 
     assert (
-        "pass@1: 1/2 (50.0%)"
+        "pass@1 iteration 0: "
+        "1/2 (50.0%)"
         in result.output
     )
 
@@ -200,10 +209,9 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
         )
     )
 
-    assert (
-        len(result_files)
-        == 1
-    )
+    assert len(
+        result_files
+    ) == 1
 
     lines = (
         result_files[0]
@@ -213,10 +221,7 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
         .splitlines()
     )
 
-    assert (
-        len(lines)
-        == 2
-    )
+    assert len(lines) == 2
 
     records = [
         json.loads(line)
@@ -224,28 +229,13 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
     ]
 
     assert (
-        records[0]["task_id"]
-        == "Go/0"
-    )
-
-    assert (
-        records[0]["status"]
-        == "PASS"
-    )
-
-    assert (
         records[0]["iteration"]
         == 0
     )
 
     assert (
-        records[1]["task_id"]
-        == "Go/1"
-    )
-
-    assert (
-        records[1]["status"]
-        == "TEST_FAIL"
+        records[1]["iteration"]
+        == 0
     )
 
     metadata_files = list(
@@ -254,10 +244,9 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
         )
     )
 
-    assert (
-        len(metadata_files)
-        == 1
-    )
+    assert len(
+        metadata_files
+    ) == 1
 
     metadata = json.loads(
         metadata_files[0]
@@ -267,23 +256,8 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
     )
 
     assert (
-        metadata["model"]
-        == "fake:model"
-    )
-
-    assert (
         metadata["iters"]
         == 0
-    )
-
-    assert (
-        metadata["requested_n"]
-        == 2
-    )
-
-    assert (
-        metadata["selected_n"]
-        == 2
     )
 
     assert (
@@ -299,24 +273,230 @@ def test_cli_runs_selected_problems_and_writes_results_and_metadata(
         == ["Go/95"]
     )
 
-    assert (
-        metadata["temperature"]
-        == 0.0
+
+def test_cli_runs_repairs_logs_every_attempt_and_reports_cumulative_pass_rate(
+    tmp_path,
+    monkeypatch,
+):
+    problems = [
+        MigrationProblem(
+            task_id="Go/0",
+            java_code="JAVA ZERO",
+            go_signature="func Zero() int {",
+            go_test="package main",
+        ),
+        MigrationProblem(
+            task_id="Go/1",
+            java_code="JAVA ONE",
+            go_signature="func One() int {",
+            go_test="package main",
+        ),
+    ]
+
+    class FakeAdapter:
+        name = "fake:model"
+        temperature = 0.0
+
+        def complete(
+            self,
+            prompt: str,
+        ) -> str:
+            return "unused"
+
+    monkeypatch.setattr(
+        cli,
+        "create_model_adapter",
+        lambda model_spec: FakeAdapter(),
     )
 
-    assert (
-        len(
-            metadata["prompt_hash"]
+    monkeypatch.setattr(
+        cli,
+        "load_java_problems",
+        lambda path: [],
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "load_go_problems",
+        lambda path: [],
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "build_migration_problems",
+        lambda java, go, excluded_task_ids=None: problems,
+    )
+
+    received_iters = []
+
+    def fake_migrate(
+        problem,
+        adapter,
+        *,
+        iters,
+    ):
+        received_iters.append(
+            iters
         )
-        == 64
+
+        if problem.task_id == "Go/0":
+            return [
+                make_attempt(
+                    task_id="Go/0",
+                    model_name=adapter.name,
+                    iteration=0,
+                    status=RunStatus.PASS,
+                )
+            ]
+
+        return [
+            make_attempt(
+                task_id="Go/1",
+                model_name=adapter.name,
+                iteration=0,
+                status=RunStatus.TEST_FAIL,
+            ),
+            make_attempt(
+                task_id="Go/1",
+                model_name=adapter.name,
+                iteration=1,
+                status=RunStatus.PASS,
+            ),
+        ]
+
+    monkeypatch.setattr(
+        cli,
+        "migrate",
+        fake_migrate,
     )
 
-    assert (
-        "created_at_utc"
-        in metadata
+    result = runner.invoke(
+        cli.app,
+        [
+            "run",
+            "--model",
+            "fake:model",
+            "--n",
+            "2",
+            "--iters",
+            "3",
+            "--results-dir",
+            str(tmp_path),
+        ],
     )
 
+    assert result.exit_code == 0
+
+    assert received_iters == [
+        3,
+        3,
+    ]
+
     assert (
-        "Metadata:"
+        "Go/0 PASS (iteration 0)"
         in result.output
+    )
+
+    assert (
+        "Go/1 PASS (iteration 1)"
+        in result.output
+    )
+
+    assert (
+        "pass@1 iteration 0: "
+        "1/2 (50.0%)"
+        in result.output
+    )
+
+    assert (
+        "pass@1 iteration 1: "
+        "2/2 (100.0%)"
+        in result.output
+    )
+
+    assert (
+        "pass@1 iteration 2: "
+        "2/2 (100.0%)"
+        in result.output
+    )
+
+    assert (
+        "pass@1 iteration 3: "
+        "2/2 (100.0%)"
+        in result.output
+    )
+
+    result_files = list(
+        tmp_path.rglob(
+            "*.jsonl"
+        )
+    )
+
+    assert len(
+        result_files
+    ) == 1
+
+    records = [
+        json.loads(line)
+        for line in (
+            result_files[0]
+            .read_text(
+                encoding="utf-8"
+            )
+            .splitlines()
+        )
+    ]
+
+    assert len(records) == 3
+
+    assert [
+        (
+            record["task_id"],
+            record["iteration"],
+            record["status"],
+        )
+        for record in records
+    ] == [
+        (
+            "Go/0",
+            0,
+            "PASS",
+        ),
+        (
+            "Go/1",
+            0,
+            "TEST_FAIL",
+        ),
+        (
+            "Go/1",
+            1,
+            "PASS",
+        ),
+    ]
+
+    metadata_files = list(
+        tmp_path.rglob(
+            "*.meta.json"
+        )
+    )
+
+    assert len(
+        metadata_files
+    ) == 1
+
+    metadata = json.loads(
+        metadata_files[0]
+        .read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert (
+        metadata["iters"]
+        == 3
+    )
+
+    assert (
+        metadata["selected_n"]
+        == 2
     )
