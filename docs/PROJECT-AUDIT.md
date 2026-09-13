@@ -4014,3 +4014,177 @@ Run the complete harness regression suite.
 
 If all tests pass, commit Step 3.2 before beginning the next Milestone 3 step.
 
+
+## Step 3.3 — Run Metadata and Reproducibility
+
+### Status
+
+Completed.
+
+### Files Modified
+
+    src/migrate_eval/results.py
+    src/migrate_eval/cli.py
+    tests/test_results.py
+    tests/test_cli.py
+
+### Goal
+
+Add reproducibility metadata for evaluation runs before enabling repair iterations through the command-line interface.
+
+Each evaluation run now records both:
+
+    <run_id>.jsonl
+    <run_id>.meta.json
+
+The JSONL file contains individual migration attempts.
+
+The metadata file contains run-level configuration.
+
+### MigrationAttempt Iteration Logging
+
+Result persistence now reads the iteration directly from:
+
+    MigrationAttempt.iteration
+
+The previous separate:
+
+    iteration=...
+
+argument was removed from:
+
+    attempt_to_record(...)
+    append_attempt(...)
+
+This prevents repair attempts from accidentally being persisted with an incorrect iteration number.
+
+### Prompt Configuration Hash
+
+Created:
+
+    prompt_config_hash(...)
+
+The function computes a stable SHA-256 hash over the configured prompt texts.
+
+The hash changes if the initial or repair prompt configuration changes.
+
+This provides a compact way to identify which prompt version was used for an evaluation run.
+
+### Run Metadata
+
+Created:
+
+    write_run_metadata(...)
+
+Each metadata file records:
+
+    run_id
+    created_at_utc
+    model
+    iters
+    requested_n
+    selected_n
+    task_ids
+    excluded_task_ids
+    temperature
+    prompt_hash
+
+### Benchmark Exclusion Metadata
+
+The known flaky benchmark item remains excluded:
+
+    Go/95
+
+The exclusion is now explicitly recorded in each metadata file.
+
+### Model Configuration
+
+The CLI records the model adapter's temperature setting when available.
+
+For adapters where no explicit temperature is configured, the metadata value may be:
+
+    null
+
+This accurately reflects the effective adapter configuration rather than inventing a value.
+
+### CLI Output
+
+Each run now produces:
+
+    results/<model>/<run_id>.jsonl
+    results/<model>/<run_id>.meta.json
+
+The CLI prints the locations of both files when the run finishes.
+
+### Repair Iterations
+
+Repair iterations are intentionally not enabled through the CLI in this step.
+
+The CLI still executes:
+
+    migrate_once(...)
+
+and currently accepts only:
+
+    --iters 0
+
+This isolates metadata/reproducibility changes from repair-loop CLI integration.
+
+Repair execution through the CLI will be connected in the next step.
+
+### Tests
+
+Results tests now verify:
+
+- MigrationAttempt iteration is persisted automatically;
+- JSONL remains append-only;
+- failure statuses remain preserved;
+- prompt hashes are stable;
+- prompt hashes change when prompt configuration changes;
+- metadata files contain the expected reproducibility configuration.
+
+CLI tests now verify:
+
+- model adapter selection;
+- unsupported providers are rejected;
+- repair iterations remain disabled during this step;
+- JSONL output is produced;
+- metadata output is produced;
+- selected benchmark task IDs are recorded;
+- benchmark exclusions are recorded;
+- temperature is recorded;
+- prompt hash is recorded.
+
+### Step-Specific Verification
+
+Command:
+
+    python -m pytest \
+      tests/test_results.py \
+      tests/test_cli.py \
+      -v
+
+Result:
+
+    14 passed
+
+### Milestone 3 Progress
+
+Completed:
+
+- Step 3.1 — Repair prompt
+- Step 3.2 — Repair loop orchestration
+- Step 3.3 — Run metadata and reproducibility
+
+Not yet implemented:
+
+- CLI execution of repair iterations;
+- real 20-problem repair evaluation;
+- saved FAIL -> repair -> PASS demonstration trace.
+
+### Next Action
+
+Run the complete harness regression suite.
+
+If all tests pass, commit Step 3.3 before enabling repair iterations through the CLI.
+

@@ -19,8 +19,15 @@ def test_create_model_adapter_builds_ollama_adapter():
         "ollama:qwen2.5-coder:14b"
     )
 
-    assert isinstance(adapter, OllamaAdapter)
-    assert adapter.name == "ollama:qwen2.5-coder:14b"
+    assert isinstance(
+        adapter,
+        OllamaAdapter,
+    )
+
+    assert (
+        adapter.name
+        == "ollama:qwen2.5-coder:14b"
+    )
 
 
 def test_create_model_adapter_builds_openai_adapter():
@@ -28,16 +35,27 @@ def test_create_model_adapter_builds_openai_adapter():
         "openai:test-model"
     )
 
-    assert isinstance(adapter, OpenAIAdapter)
-    assert adapter.name == "openai:test-model"
+    assert isinstance(
+        adapter,
+        OpenAIAdapter,
+    )
+
+    assert (
+        adapter.name
+        == "openai:test-model"
+    )
 
 
 def test_create_model_adapter_rejects_unknown_provider():
-    with pytest.raises(ValueError):
-        cli.create_model_adapter("unknown:model")
+    with pytest.raises(
+        ValueError
+    ):
+        cli.create_model_adapter(
+            "unknown:model"
+        )
 
 
-def test_cli_rejects_repair_iterations_in_milestone_2():
+def test_cli_still_rejects_repairs_during_metadata_step():
     result = runner.invoke(
         cli.app,
         [
@@ -49,11 +67,18 @@ def test_cli_rejects_repair_iterations_in_milestone_2():
         ],
     )
 
-    assert result.exit_code != 0
-    assert "supports only --iters 0" in result.output
+    assert (
+        result.exit_code
+        != 0
+    )
+
+    assert (
+        "currently supports only --iters 0"
+        in result.output
+    )
 
 
-def test_cli_runs_selected_problems_and_writes_jsonl(
+def test_cli_runs_selected_problems_and_writes_results_and_metadata(
     tmp_path,
     monkeypatch,
 ):
@@ -74,8 +99,12 @@ def test_cli_runs_selected_problems_and_writes_jsonl(
 
     class FakeAdapter:
         name = "fake:model"
+        temperature = 0.0
 
-        def complete(self, prompt: str) -> str:
+        def complete(
+            self,
+            prompt: str,
+        ) -> str:
             return "unused"
 
     monkeypatch.setattr(
@@ -102,7 +131,10 @@ def test_cli_runs_selected_problems_and_writes_jsonl(
         lambda java, go, excluded_task_ids=None: problems,
     )
 
-    def fake_migrate_once(problem, adapter):
+    def fake_migrate_once(
+        problem,
+        adapter,
+    ):
         status = (
             RunStatus.PASS
             if problem.task_id == "Go/0"
@@ -121,6 +153,7 @@ def test_cli_runs_selected_problems_and_writes_jsonl(
                 stderr="",
                 duration=0.1,
             ),
+            iteration=0,
         )
 
     monkeypatch.setattr(
@@ -145,29 +178,145 @@ def test_cli_runs_selected_problems_and_writes_jsonl(
     )
 
     assert result.exit_code == 0
-    assert "Go/0 PASS" in result.output
-    assert "Go/1 TEST_FAIL" in result.output
-    assert "pass@1: 1/2 (50.0%)" in result.output
 
-    result_files = list(
-        tmp_path.rglob("*.jsonl")
+    assert (
+        "Go/0 PASS"
+        in result.output
     )
 
-    assert len(result_files) == 1
+    assert (
+        "Go/1 TEST_FAIL"
+        in result.output
+    )
 
-    lines = result_files[0].read_text(
-        encoding="utf-8",
-    ).splitlines()
+    assert (
+        "pass@1: 1/2 (50.0%)"
+        in result.output
+    )
 
-    assert len(lines) == 2
+    result_files = list(
+        tmp_path.rglob(
+            "*.jsonl"
+        )
+    )
+
+    assert (
+        len(result_files)
+        == 1
+    )
+
+    lines = (
+        result_files[0]
+        .read_text(
+            encoding="utf-8"
+        )
+        .splitlines()
+    )
+
+    assert (
+        len(lines)
+        == 2
+    )
 
     records = [
         json.loads(line)
         for line in lines
     ]
 
-    assert records[0]["task_id"] == "Go/0"
-    assert records[0]["status"] == "PASS"
+    assert (
+        records[0]["task_id"]
+        == "Go/0"
+    )
 
-    assert records[1]["task_id"] == "Go/1"
-    assert records[1]["status"] == "TEST_FAIL"
+    assert (
+        records[0]["status"]
+        == "PASS"
+    )
+
+    assert (
+        records[0]["iteration"]
+        == 0
+    )
+
+    assert (
+        records[1]["task_id"]
+        == "Go/1"
+    )
+
+    assert (
+        records[1]["status"]
+        == "TEST_FAIL"
+    )
+
+    metadata_files = list(
+        tmp_path.rglob(
+            "*.meta.json"
+        )
+    )
+
+    assert (
+        len(metadata_files)
+        == 1
+    )
+
+    metadata = json.loads(
+        metadata_files[0]
+        .read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert (
+        metadata["model"]
+        == "fake:model"
+    )
+
+    assert (
+        metadata["iters"]
+        == 0
+    )
+
+    assert (
+        metadata["requested_n"]
+        == 2
+    )
+
+    assert (
+        metadata["selected_n"]
+        == 2
+    )
+
+    assert (
+        metadata["task_ids"]
+        == [
+            "Go/0",
+            "Go/1",
+        ]
+    )
+
+    assert (
+        metadata["excluded_task_ids"]
+        == ["Go/95"]
+    )
+
+    assert (
+        metadata["temperature"]
+        == 0.0
+    )
+
+    assert (
+        len(
+            metadata["prompt_hash"]
+        )
+        == 64
+    )
+
+    assert (
+        "created_at_utc"
+        in metadata
+    )
+
+    assert (
+        "Metadata:"
+        in result.output
+    )

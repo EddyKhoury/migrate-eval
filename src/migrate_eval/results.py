@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Sequence
 
 from migrate_eval.loop import MigrationAttempt
 
 
 def attempt_to_record(
     attempt: MigrationAttempt,
-    *,
-    iteration: int = 0,
 ) -> dict:
     """Convert a MigrationAttempt into a JSON-serializable record."""
 
     return {
         "task_id": attempt.task_id,
         "model": attempt.model_name,
-        "iteration": iteration,
+        "iteration": attempt.iteration,
         "prompt": attempt.prompt,
         "raw_response": attempt.raw_response,
         "go_code": attempt.go_code,
@@ -32,8 +33,6 @@ def attempt_to_record(
 def append_attempt(
     path: str | Path,
     attempt: MigrationAttempt,
-    *,
-    iteration: int = 0,
 ) -> None:
     """Append one migration attempt to a JSONL result file."""
 
@@ -44,10 +43,7 @@ def append_attempt(
         exist_ok=True,
     )
 
-    record = attempt_to_record(
-        attempt,
-        iteration=iteration,
-    )
+    record = attempt_to_record(attempt)
 
     with path.open(
         "a",
@@ -57,5 +53,67 @@ def append_attempt(
             record,
             file,
             ensure_ascii=False,
+        )
+        file.write("\n")
+
+
+def prompt_config_hash(
+    *prompt_texts: str,
+) -> str:
+    """Return a stable SHA-256 hash for the configured prompt texts."""
+
+    payload = "\n---PROMPT-BOUNDARY---\n".join(prompt_texts)
+
+    return hashlib.sha256(
+        payload.encode("utf-8")
+    ).hexdigest()
+
+
+def write_run_metadata(
+    path: str | Path,
+    *,
+    run_id: str,
+    model: str,
+    iters: int,
+    requested_n: int,
+    task_ids: Sequence[str],
+    excluded_task_ids: Sequence[str],
+    temperature: float | None,
+    prompt_hash: str,
+) -> None:
+    """Write reproducibility metadata for one evaluation run."""
+
+    path = Path(path)
+
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    metadata = {
+        "run_id": run_id,
+        "created_at_utc": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "model": model,
+        "iters": iters,
+        "requested_n": requested_n,
+        "selected_n": len(task_ids),
+        "task_ids": list(task_ids),
+        "excluded_task_ids": list(excluded_task_ids),
+        "temperature": temperature,
+        "prompt_hash": prompt_hash,
+    }
+
+    with path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            metadata,
+            file,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
         )
         file.write("\n")
