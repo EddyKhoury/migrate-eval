@@ -2429,3 +2429,77 @@ Milestone 2 — Single-Shot Migration
 The next milestone introduces model adapters, migration prompts, Go-code extraction, and the first Java-to-Go LLM migrations.
 
 Milestone 2 must begin in a new chat.
+
+
+## Step 2.1 — Model Adapter Contract
+
+### Status
+
+Completed.
+
+### Files Added
+
+```
+src/migrate_eval/models/base.py
+tests/test_model_base.py
+```
+
+### Implemented
+
+Created the shared model interface:
+
+```
+ModelAdapter
+```
+
+The protocol defines:
+
+```
+name: str
+complete(prompt: str) -> str
+```
+
+All model backends used by migrate-eval will implement this same interface.
+
+This allows later pipeline components to call OpenAI, Ollama, or future model providers without depending on provider-specific APIs.
+
+### Design Decision
+
+`ModelAdapter` is implemented as a runtime-checkable Python `Protocol`.
+
+This provides structural typing: a model class does not need to inherit from a specific base class as long as it exposes the required attributes and methods.
+
+This keeps model adapters lightweight and interchangeable.
+
+### Tests Added
+
+Verified that:
+
+* a structurally compatible model satisfies `ModelAdapter`;
+* a model missing the `complete()` method does not satisfy the protocol;
+* the adapter contract can execute a mocked completion without any network access.
+
+### Step-Specific Verification
+
+Command:
+
+```
+python -m pytest tests/test_model_base.py -v
+```
+
+Result:
+
+```
+2 passed
+```
+
+### Next Action
+
+Implement the first real model backend:
+
+```
+OpenAI adapter
+```
+
+The adapter will use the shared ModelAdapter contract introduced in this step.
+
