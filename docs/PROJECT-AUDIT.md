@@ -3831,3 +3831,186 @@ Run the complete harness regression suite.
 
 If all tests pass, commit Step 3.1 before beginning Step 3.2 — Repair Loop.
 
+
+## Step 3.2 — Repair Loop Orchestration
+
+### Status
+
+Completed.
+
+### Files Modified
+
+    src/migrate_eval/loop.py
+    tests/test_loop.py
+
+### Goal
+
+Extend the Milestone 2 single-shot migration pipeline into an iterative repair loop.
+
+The repair loop allows failed Go migrations to be sent back to the model with compiler/test feedback for up to a configured number of repair rounds.
+
+### MigrationAttempt Iteration Tracking
+
+MigrationAttempt now records:
+
+    iteration
+
+Iteration numbering is:
+
+    0 = initial migration
+    1 = first repair
+    2 = second repair
+    3 = third repair
+
+The default iteration for migrate_once() remains:
+
+    0
+
+This preserves compatibility with the Milestone 2 single-shot path.
+
+### Shared Attempt Execution
+
+Created internal helper:
+
+    _execute_prompt(...)
+
+This centralizes the common attempt pipeline:
+
+    prompt
+        ->
+    model.complete(...)
+        ->
+    Go extraction
+        ->
+    Docker oracle
+        ->
+    MigrationAttempt
+
+The helper is reused by both:
+
+    migrate_once(...)
+    migrate(...)
+
+This avoids duplicating model, extraction, runner, MODEL_ERROR, and EXTRACT_ERROR handling.
+
+### Repair Loop
+
+Created:
+
+    migrate(problem, model, iters, runner=...)
+
+Behavior:
+
+1. Run the initial migration as iteration 0.
+2. If iteration 0 passes, stop immediately.
+3. If it fails and repair iterations remain:
+   - build a repair prompt from the latest failed Go code;
+   - include the latest RunResult feedback;
+   - execute the repaired implementation;
+   - record the new iteration.
+4. Stop immediately when any iteration returns PASS.
+5. Otherwise continue until the configured repair limit is reached.
+
+### Iteration Semantics
+
+The iters argument represents the number of repair rounds.
+
+Therefore:
+
+    iters=0
+
+means:
+
+    iteration 0 only
+
+and:
+
+    iters=3
+
+allows at most:
+
+    iteration 0
+    iteration 1
+    iteration 2
+    iteration 3
+
+for a maximum of four total model attempts.
+
+### Failure Handling
+
+If an attempt results in:
+
+    MODEL_ERROR
+    EXTRACT_ERROR
+
+and no valid Go code is available, the repair loop stops.
+
+This prevents attempting to construct a repair prompt when there is no extracted implementation to repair.
+
+Compiler failures and test failures remain repairable because the failed Go code is available.
+
+### Backward Compatibility
+
+The existing:
+
+    migrate_once(...)
+
+function remains available.
+
+Its behavior is unchanged from Milestone 2 except that the returned MigrationAttempt explicitly records:
+
+    iteration = 0
+
+This preserves the existing single-shot migration path while adding repair-loop support separately.
+
+### Validation Rules
+
+The repair loop verifies that:
+
+- initial PASS stops immediately;
+- failed code is sent to a repair prompt;
+- repair feedback includes the previous failure;
+- PASS during repair stops further iterations;
+- maximum repair count is respected;
+- iters=0 preserves single-shot behavior;
+- iteration numbers are recorded correctly;
+- EXTRACT_ERROR stops when no Go code is available;
+- negative repair counts are rejected.
+
+### Tests
+
+The loop test suite now contains:
+
+    11 tests
+
+including the original Milestone 2 single-shot tests and new repair-loop tests.
+
+### Step-Specific Verification
+
+Command:
+
+    python -m pytest tests/test_loop.py -v
+
+Result:
+
+    11 passed
+
+### Milestone 3 Progress
+
+Completed:
+
+- Step 3.1 — Repair prompt
+- Step 3.2 — Repair loop orchestration
+
+Not yet implemented:
+
+- CLI support for repair iterations;
+- per-run reproducibility metadata;
+- real 20-problem repair evaluation.
+
+### Next Action
+
+Run the complete harness regression suite.
+
+If all tests pass, commit Step 3.2 before beginning the next Milestone 3 step.
+
