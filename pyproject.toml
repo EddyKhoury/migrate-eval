@@ -18,10 +18,14 @@ dependencies = [
     "python-dotenv",
 ]
 
+[project.scripts]
+migrate-eval = "migrate_eval.cli:app"
+
 [project.optional-dependencies]
 dev = [
     "pytest",
 ]
+
 
 [tool.setuptools.packages.find]
 where = ["src"]

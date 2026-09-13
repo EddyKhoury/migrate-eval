@@ -3112,3 +3112,262 @@ Completed:
 
 Implement JSONL result logging and the command-line interface for running single-shot migration experiments.
 
+## Step 2.7 — JSONL Results and Command-Line Interface
+
+### Status
+
+Completed.
+
+### Files Added
+
+    src/migrate_eval/results.py
+    src/migrate_eval/cli.py
+    tests/test_results.py
+    tests/test_cli.py
+
+### Files Modified
+
+    src/migrate_eval/models/openai_adapter.py
+    pyproject.toml
+
+### Goal
+
+Add persistent result logging and a user-facing command-line interface for running single-shot migration evaluations.
+
+---
+
+### JSONL Result Logging
+
+Created:
+
+    attempt_to_record(...)
+    append_attempt(...)
+
+A MigrationAttempt can now be converted into a JSON-serializable record containing:
+
+    task_id
+    model
+    iteration
+    prompt
+    raw_response
+    go_code
+    status
+    stdout
+    stderr
+    duration
+
+Each migration attempt is written as one JSON object per line.
+
+Example structure:
+
+    results/
+        <model>/
+            <run_id>.jsonl
+
+### Append-Only Design
+
+Result files are opened in append mode.
+
+This ensures later benchmark problems are added without overwriting earlier attempts.
+
+This design also supports the repair loop planned for Milestone 3, where multiple iterations of the same benchmark problem will be recorded.
+
+### Results Tests
+
+Verified:
+
+- MigrationAttempt converts to JSON-serializable data.
+- RunStatus is stored using its string value.
+- failure statuses are preserved.
+- missing parent directories are created automatically.
+- one attempt produces one JSONL line.
+- multiple attempts append rather than overwrite.
+
+Step-specific result:
+
+    5 passed
+
+---
+
+### CLI
+
+Created:
+
+    migrate-eval
+
+with the command:
+
+    migrate-eval run
+
+The Milestone 2 CLI supports:
+
+    --model
+    --n
+    --iters
+    --java-dataset
+    --go-dataset
+    --results-dir
+
+Example intended usage:
+
+    migrate-eval run \
+        --model ollama:qwen2.5-coder:14b \
+        --n 20 \
+        --iters 0
+
+### Model Specifications
+
+Supported forms:
+
+    ollama:<model>
+    openai:<model>
+
+Examples:
+
+    ollama:qwen2.5-coder:14b
+    openai:<model-name>
+
+The CLI creates the corresponding ModelAdapter automatically.
+
+### Milestone 2 Iteration Restriction
+
+Milestone 2 supports only:
+
+    --iters 0
+
+Requests for repair iterations are rejected.
+
+Repair iterations belong to Milestone 3.
+
+### Benchmark Handling
+
+The CLI:
+
+1. loads HumanEval-X Java records;
+2. loads HumanEval-X Go records;
+3. pairs Java and Go tasks;
+4. excludes the known flaky canonical benchmark:
+
+       Go/95
+
+5. selects the requested number of tasks;
+6. performs one migration attempt per task;
+7. writes each result immediately to JSONL;
+8. prints each task status;
+9. calculates and prints pass@1.
+
+### Run Identification
+
+Each execution receives a unique run identifier consisting of:
+
+    UTC timestamp
+    +
+    short UUID suffix
+
+Results are written beneath a filesystem-safe model directory.
+
+### CLI Tests
+
+All CLI behavior is tested without:
+
+- real OpenAI requests;
+- real Ollama requests;
+- Docker execution.
+
+The tests verify:
+
+- Ollama adapter selection;
+- OpenAI adapter selection;
+- invalid provider rejection;
+- rejection of repair iterations in Milestone 2;
+- selected-problem execution;
+- JSONL output;
+- PASS and TEST_FAIL output;
+- pass@1 calculation.
+
+Step-specific result:
+
+    5 passed
+
+### OpenAI Adapter Improvement
+
+During CLI testing, constructing an OpenAIAdapter immediately attempted to create an authenticated OpenAI client.
+
+This caused tests to require:
+
+    OPENAI_API_KEY
+
+even though no API request was being performed.
+
+The adapter was changed to initialize the OpenAI client lazily.
+
+The client is now created only when:
+
+    complete(...)
+
+is actually called.
+
+This keeps adapter construction:
+
+- offline;
+- testable;
+- independent of credentials.
+
+### Typer Command Structure Fix
+
+Typer initially interpreted the application as a single-command CLI.
+
+This caused:
+
+    migrate-eval run ...
+
+to treat `run` as an unexpected argument.
+
+A root callback was added so the CLI operates as a command group:
+
+    migrate-eval
+        └── run
+
+### Package Entry Point
+
+Added to pyproject.toml:
+
+    [project.scripts]
+    migrate-eval = "migrate_eval.cli:app"
+
+The editable package was reinstalled.
+
+Verification:
+
+    migrate-eval --help
+
+successfully displayed the `run` command.
+
+---
+
+### Milestone 2 Progress
+
+Completed:
+
+- Step 2.1 — ModelAdapter contract
+- Step 2.2 — OpenAI adapter
+- Step 2.3 — Ollama adapter
+- Step 2.4 — Initial migration prompt
+- Step 2.5 — Go code extractor
+- Step 2.6 — Single-shot migration pipeline
+- Step 2.7 — JSONL results and CLI
+
+### Next Action
+
+Run the first real single-shot evaluation:
+
+    20 HumanEval-X problems
+    ×
+    Ollama model
+    ×
+    OpenAI model
+
+Then calculate and compare pass@1.
+
+This is Step 2.8 and the final step of Milestone 2.
+
