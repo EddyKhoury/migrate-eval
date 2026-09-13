@@ -2503,3 +2503,95 @@ OpenAI adapter
 
 The adapter will use the shared ModelAdapter contract introduced in this step.
 
+
+## Step 2.2 — OpenAI Model Adapter
+
+### Status
+
+Completed.
+
+### Files Added
+
+```
+src/migrate_eval/models/openai_adapter.py
+tests/test_openai_adapter.py
+```
+
+### Implemented
+
+Created:
+
+```
+OpenAIAdapter
+```
+
+The adapter implements the shared ModelAdapter contract introduced in Step 2.1.
+
+The adapter exposes:
+
+```
+name
+complete(prompt: str) -> str
+```
+
+and uses the OpenAI Responses API internally.
+
+### Adapter Behavior
+
+The adapter:
+
+* accepts the model name as configuration;
+* uses temperature 0.0 by default for deterministic evaluation;
+* supports dependency injection of the OpenAI client;
+* configures timeout and SDK retry behavior;
+* records completion latency;
+* reads input and output token usage when available;
+* returns the raw generated text through `response.output_text`.
+
+### Naming Convention
+
+Model names are exposed to the evaluation pipeline as:
+
+```
+openai:<model>
+```
+
+This will later allow result files and evaluation summaries to distinguish providers and models consistently.
+
+### Testing Strategy
+
+The OpenAI API is never called from pytest.
+
+A fake OpenAI client was injected into the adapter so tests remain:
+
+* deterministic;
+* fast;
+* offline;
+* free of API cost.
+
+### Tests Added
+
+Verified that:
+
+* OpenAIAdapter satisfies the ModelAdapter protocol;
+* the adapter returns the generated response text;
+* the expected model, prompt, and temperature are sent to the client.
+
+### Step-Specific Verification
+
+Command:
+
+```
+python -m pytest tests/test_openai_adapter.py -v
+```
+
+Result:
+
+```
+3 passed
+```
+
+### Next Action
+
+Implement the local Ollama model adapter using the same ModelAdapter interface.
+
