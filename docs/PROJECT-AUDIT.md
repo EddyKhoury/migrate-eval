@@ -2240,3 +2240,192 @@ No benchmark exclusions are currently required.
 ### Next Action
 
 Run the complete 164-problem canonical HumanEval-X validation again using the corrected assembler.
+
+---
+
+## Step 1.14B — Final Canonical Validation and Benchmark Exclusion
+
+### Status
+
+Completed.
+
+### Final Full Validation
+
+After correcting HumanEval-X canonical source/test assembly, all 164 Go problems were rerun through the Docker oracle.
+
+The final validation used four concurrent workers for the evaluation run only.
+
+The project runner itself was not modified for parallel execution.
+
+### Raw Result
+
+Canonical problems:
+
+    164
+
+PASS:
+
+    163
+
+TEST_FAIL:
+
+    1
+
+COMPILE_ERROR:
+
+    0
+
+TIMEOUT:
+
+    0
+
+Raw canonical pass rate:
+
+    163 / 164
+    99.39%
+
+This exceeds the Milestone 1 requirement of:
+
+    >= 160 / 164 PASS
+
+### Remaining Failure
+
+Task:
+
+    Go/95
+
+Function:
+
+    CheckDictCase
+
+Status:
+
+    TEST_FAIL
+
+The failing benchmark assertion expected false for a dictionary containing mixed-case keys, while the canonical implementation returned true.
+
+### Go/95 Root Cause
+
+The canonical HumanEval-X implementation is dependent on Go map iteration order.
+
+Its loop contains logic equivalent to:
+
+    if first key determines case:
+        state = upper or lower
+    else if next key has conflicting case:
+        state = mixed
+        break
+    else:
+        break
+
+The final unconditional break means that when the second visited key has the same case as the first, the function exits without examining the remaining dictionary keys.
+
+Because Go map iteration order is unspecified, the mixed dictionary:
+
+    {"p", "A", "B"}
+
+may be inspected in an order such as:
+
+    "A"
+    "B"
+
+The implementation then returns true before inspecting:
+
+    "p"
+
+In a different iteration order it may correctly detect mixed case and return false.
+
+Therefore Go/95 is a flaky canonical benchmark item rather than an oracle failure.
+
+### Benchmark Exclusion
+
+Excluded:
+
+    Go/95
+
+Reason:
+
+    canonical HumanEval-X implementation is nondeterministic due to dependence on Go map iteration order.
+
+No other benchmark problems are excluded.
+
+### Validated Evaluation Set
+
+Usable benchmark problems:
+
+    163
+
+Canonical oracle result after exclusion:
+
+    163 / 163 PASS
+
+Oracle validity:
+
+    100%
+
+### Milestone 1 Final Result
+
+The Docker-based Go oracle has been validated successfully.
+
+Verified behaviors:
+
+    PASS
+    TEST_FAIL
+    COMPILE_ERROR
+    TIMEOUT
+
+Verified safety properties:
+
+- generated Go code never executes directly on the host;
+- non-root Docker execution;
+- CPU limited to 1 core;
+- memory limited to 512 MB;
+- runtime network disabled;
+- container root filesystem read-only;
+- host source mount read-only;
+- temporary execution workspace;
+- timeout enforcement;
+- runaway container termination;
+- temporary host directory cleanup.
+
+Canonical HumanEval-X validation:
+
+    163 / 164 raw PASS
+    Go/95 excluded as a flaky canonical benchmark item
+    163 / 163 validated benchmark PASS
+
+## Milestone 1 — Oracle Works
+
+### Status
+
+COMPLETED.
+
+### Exit Criteria
+
+- [x] Docker Go runner implemented
+- [x] CPU restriction implemented
+- [x] Memory restriction implemented
+- [x] Runtime network disabled
+- [x] Timeout enforcement implemented
+- [x] PASS verified
+- [x] TEST_FAIL verified
+- [x] COMPILE_ERROR verified
+- [x] TIMEOUT verified
+- [x] Temporary directory cleanup verified
+- [x] Runner status parsing tested
+- [x] HumanEval-X canonical Go solutions evaluated
+- [x] >=160/164 canonical solutions PASS
+- [x] Benchmark failure inspected and documented
+- [x] Benchmark exclusion list established
+
+### Final Exclusion List
+
+    Go/95
+
+### Next Milestone
+
+Milestone 2 — Single-Shot Migration
+
+The next milestone introduces model adapters, migration prompts, Go-code extraction, and the first Java-to-Go LLM migrations.
+
+Milestone 2 must begin in a new chat.
