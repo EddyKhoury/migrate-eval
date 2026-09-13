@@ -3677,3 +3677,157 @@ Feed compiler/test failures back to the model and measure whether up to three re
 
 Milestone 3 must begin in a new chat.
 
+
+## Step 3.1 — Repair Prompt
+
+### Status
+
+Completed.
+
+### Files Modified
+
+    src/migrate_eval/prompts.py
+    tests/test_prompts.py
+
+### Goal
+
+Create the repair prompt used by Milestone 3 when a generated Go migration fails compilation or target-language tests.
+
+The repair loop itself is not implemented yet.
+
+### Implemented
+
+Created:
+
+    repair(go_code, run_result)
+
+The function constructs a repair prompt containing:
+
+- the current generated Go implementation;
+- the RunResult failure status;
+- captured stdout;
+- captured stderr;
+- instructions to return the complete corrected Go implementation.
+
+### Repair Prompt Requirements
+
+The model is instructed to:
+
+- fix the existing Go implementation;
+- preserve the intended behavior;
+- preserve required function signatures;
+- return the complete corrected Go source;
+- return exactly one Go code block;
+- use package main;
+- not include tests;
+- not include a main function;
+- not include explanations outside the code block.
+
+### Failure Feedback
+
+Created internal feedback formatting for:
+
+    stdout
+    stderr
+
+The repair prompt therefore exposes the compiler or test feedback produced by the Docker oracle.
+
+If neither stdout nor stderr is available, the prompt includes:
+
+    (no compiler or test output was captured)
+
+### Output Truncation
+
+Repair feedback is limited to:
+
+    60 actual compiler/test output lines
+
+The STDOUT and STDERR labels do not consume the 60-line budget.
+
+If more output exists, the feedback ends with:
+
+    ...[output truncated]...
+
+This prevents unusually large compiler or test output from unnecessarily increasing repair-prompt size.
+
+### Design Decision — Original Java Not Included
+
+The Step 3.1 repair prompt does not include the original Java source.
+
+The repair model receives only:
+
+    current Go code
+    +
+    failure status
+    +
+    compiler/test output
+
+This establishes the repair-without-source condition.
+
+The project plan later calls for an ablation comparing repair prompts with and without the original Java implementation.
+
+### Tests Added
+
+Repair prompt tests verify that:
+
+- current Go code appears in the prompt;
+- RunResult status appears in the prompt;
+- failure output appears in the prompt;
+- stdout and stderr are both preserved;
+- failure output is truncated correctly;
+- the prompt requests full corrected source;
+- the prompt requires exactly one Go code block;
+- package main is required;
+- tests and main functions are forbidden;
+- explanations outside the code block are forbidden.
+
+Existing Milestone 2 initial-prompt tests remain unchanged.
+
+### Step-Specific Verification
+
+Command:
+
+    python -m pytest tests/test_prompts.py -v
+
+Result:
+
+    9 passed
+
+Prompt tests currently consist of:
+
+    4 initial migration prompt tests
+    5 repair prompt tests
+
+### Problem Encountered
+
+The first truncation implementation counted the:
+
+    STDOUT:
+
+label as one of the 60 allowed feedback lines.
+
+As a result, only 59 actual output lines were preserved.
+
+The implementation was corrected so the 60-line limit now applies only to actual compiler/test output.
+
+### Milestone 3 Progress
+
+Completed:
+
+- Step 3.1 — Repair prompt
+
+Not yet implemented:
+
+- repair-loop orchestration;
+- iterative migration attempts;
+- stopping on PASS;
+- maximum repair iteration enforcement;
+- run metadata;
+- real repair evaluation.
+
+### Next Action
+
+Run the complete harness regression suite.
+
+If all tests pass, commit Step 3.1 before beginning Step 3.2 — Repair Loop.
+
