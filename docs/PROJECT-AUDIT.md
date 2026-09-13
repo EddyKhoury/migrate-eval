@@ -3371,3 +3371,309 @@ Then calculate and compare pass@1.
 
 This is Step 2.8 and the final step of Milestone 2.
 
+## Step 2.8 — Real Single-Shot Model Evaluation
+
+### Status
+
+Completed.
+
+### Goal
+
+Run the first real Java-to-Go single-shot benchmark using both configured model backends.
+
+Each model received exactly one migration attempt per problem:
+
+    iteration = 0
+
+No repair feedback or additional attempts were allowed.
+
+The same first 20 usable HumanEval-X Java-to-Go problems were evaluated for both models.
+
+The known flaky benchmark item:
+
+    Go/95
+
+remains excluded from the validated benchmark set.
+
+---
+
+### Ollama Smoke Test
+
+Model:
+
+    ollama:qwen2.5-coder:14b
+
+One real migration was executed end-to-end.
+
+Task:
+
+    Go/0
+
+Result:
+
+    PASS
+
+The complete production path was exercised:
+
+    HumanEval-X Java source
+        ->
+    initial migration prompt
+        ->
+    qwen2.5-coder:14b
+        ->
+    raw model response
+        ->
+    Go extraction
+        ->
+    Docker oracle
+        ->
+    HumanEval-X Go tests
+        ->
+    PASS
+
+The JSONL record successfully preserved:
+
+    task_id
+    model
+    iteration
+    prompt
+    raw_response
+    extracted Go code
+    status
+    stdout
+    stderr
+    duration
+
+Smoke-test result file:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260913T141031Z-f8f95734.jsonl
+
+---
+
+### Ollama 20-Problem Evaluation
+
+Model:
+
+    ollama:qwen2.5-coder:14b
+
+Problems:
+
+    20
+
+Results:
+
+    PASS           14
+    COMPILE_ERROR   4
+    TEST_FAIL       2
+
+pass@1:
+
+    14 / 20
+    70.0%
+
+Result file:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260913T141209Z-4d3bc62f.jsonl
+
+The local model therefore successfully migrated 70% of the first 20 benchmark problems in a single attempt.
+
+---
+
+### OpenAI Integration Issues and Fixes
+
+The OpenAI smoke test exposed two configuration/compatibility issues before a successful model call was achieved.
+
+#### API Key Validation
+
+An initial API request returned:
+
+    MODEL_ERROR
+    HTTP 401 invalid_api_key
+
+The environment configuration was inspected without exposing the secret key.
+
+A direct authenticated request to the OpenAI API returned:
+
+    Status: 200
+    API key is valid.
+
+This confirmed that the final local API credential configuration was correct.
+
+The `.env` file remains ignored by Git.
+
+#### Unsupported Temperature Parameter
+
+After authentication was fixed, GPT-5.6 Terra returned:
+
+    Unsupported parameter:
+    'temperature' is not supported with this model.
+
+The OpenAI adapter previously sent:
+
+    temperature = 0.0
+
+for every model.
+
+The adapter was changed so temperature is now optional:
+
+    temperature: float | None = None
+
+The request includes the temperature parameter only when it is explicitly configured.
+
+This allows models such as GPT-5.6 Terra to operate without receiving unsupported sampling parameters while retaining temperature support for compatible models.
+
+The OpenAI adapter test suite was updated accordingly.
+
+Verification:
+
+    4 passed
+
+---
+
+### OpenAI Smoke Test
+
+Model:
+
+    openai:gpt-5.6-terra
+
+Task:
+
+    Go/0
+
+Result:
+
+    PASS
+
+This confirmed the complete OpenAI production path:
+
+    HumanEval-X Java
+        ->
+    prompt
+        ->
+    OpenAI Responses API
+        ->
+    GPT-5.6 Terra
+        ->
+    extraction
+        ->
+    Docker oracle
+        ->
+    Go tests
+        ->
+    PASS
+
+Smoke-test result file:
+
+    results/openai__gpt-5.6-terra/
+    20260913T144140Z-5e0c0716.jsonl
+
+---
+
+### OpenAI 20-Problem Evaluation
+
+Model:
+
+    openai:gpt-5.6-terra
+
+Problems:
+
+    20
+
+Results:
+
+    PASS           18
+    COMPILE_ERROR   2
+    TEST_FAIL       0
+
+pass@1:
+
+    18 / 20
+    90.0%
+
+Result file:
+
+    results/openai__gpt-5.6-terra/
+    20260913T144228Z-be0fdf52.jsonl
+
+---
+
+### Single-Shot Model Comparison
+
+Results on the same 20 benchmark problems:
+
+| Model | PASS | COMPILE_ERROR | TEST_FAIL | pass@1 |
+|---|---:|---:|---:|---:|
+| qwen2.5-coder:14b | 14 | 4 | 2 | 70.0% |
+| gpt-5.6-terra | 18 | 2 | 0 | 90.0% |
+
+GPT-5.6 Terra achieved:
+
+    +4 passing problems
+
+and:
+
+    +20 percentage points pass@1
+
+relative to qwen2.5-coder:14b on this 20-problem single-shot sample.
+
+Residual failures:
+
+    qwen2.5-coder:14b
+        4 compile errors
+        2 test failures
+
+    gpt-5.6-terra
+        2 compile errors
+        0 test failures
+
+These measurements establish the iteration-0 baseline that the repair loop in Milestone 3 will attempt to improve.
+
+---
+
+# Milestone 2 — Single-Shot Migration
+
+## Status
+
+COMPLETED.
+
+### Completed
+
+- ModelAdapter protocol
+- OpenAI model adapter
+- Ollama model adapter
+- initial Java-to-Go prompt
+- Go response extraction
+- EXTRACT_ERROR handling
+- MODEL_ERROR handling
+- paired Java/Go benchmark representation
+- single-shot migration orchestration
+- real Docker integration
+- JSONL attempt logging
+- append-only result persistence
+- CLI
+- model selection through CLI
+- pass@1 reporting
+- 20-problem Ollama evaluation
+- 20-problem OpenAI evaluation
+- comparison of two real models
+
+### Milestone 2 Exit Results
+
+    qwen2.5-coder:14b
+    pass@1 = 70.0%
+
+    gpt-5.6-terra
+    pass@1 = 90.0%
+
+### Next Milestone
+
+Milestone 3 — Repair Loop
+
+Main objective:
+
+Feed compiler/test failures back to the model and measure whether up to three repair iterations improve the single-shot baseline.
+
+Milestone 3 must begin in a new chat.
+

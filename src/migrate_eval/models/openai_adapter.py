@@ -16,7 +16,7 @@ class OpenAIAdapter:
         model: str,
         *,
         client: Any | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_retries: int = 2,
         timeout: float = 60.0,
     ) -> None:
@@ -44,22 +44,28 @@ class OpenAIAdapter:
 
         client = self._get_client()
 
+        request: dict[str, Any] = {
+            "model": self.model,
+            "input": prompt,
+        }
+
+        if self.temperature is not None:
+            request["temperature"] = self.temperature
+
         start = time.perf_counter()
 
-        response = client.responses.create(
-            model=self.model,
-            input=prompt,
-            temperature=self.temperature,
-        )
+        response = client.responses.create(**request)
 
         duration = time.perf_counter() - start
 
         usage = getattr(response, "usage", None)
+
         input_tokens = getattr(
             usage,
             "input_tokens",
             None,
         )
+
         output_tokens = getattr(
             usage,
             "output_tokens",

@@ -60,6 +60,25 @@ def test_openai_adapter_sends_expected_request():
         {
             "model": "test-model",
             "input": "migrate this code",
+        }
+    ]
+
+
+def test_openai_adapter_sends_temperature_when_configured():
+    client = FakeOpenAIClient()
+
+    adapter = OpenAIAdapter(
+        model="test-model",
+        client=client,
+        temperature=0.0,
+    )
+
+    adapter.complete("migrate this code")
+
+    assert client.responses.calls == [
+        {
+            "model": "test-model",
+            "input": "migrate this code",
             "temperature": 0.0,
         }
     ]
