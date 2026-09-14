@@ -5940,3 +5940,323 @@ Commit the validated Ollama full-evaluation audit.
 
 Then begin Step 4.5 — Results Aggregation.
 
+
+## Step 4.5 — Results Aggregation
+
+### Status
+
+Completed.
+
+### Goal
+
+Convert raw evaluation JSONL records into reusable tabular summaries for:
+
+- cumulative pass@1 by repair iteration
+- initial and final failure taxonomy
+- token and latency telemetry
+- model-level comparison metrics
+
+### Implementation
+
+Extended:
+
+    src/migrate_eval/results.py
+
+with the following analysis functions.
+
+#### load_results
+
+Loads one or more evaluation JSONL files into a pandas DataFrame.
+
+Required record fields:
+
+    task_id
+    model
+    iteration
+    status
+
+Adds:
+
+    source_file
+
+to preserve result-file provenance.
+
+#### cumulative_pass_rates
+
+Calculates cumulative pass@1 by:
+
+    model
+    iteration
+
+A task counts as passed at iteration i if it has produced a PASS at any iteration <= i.
+
+Returned fields:
+
+    model
+    iteration
+    passed
+    total
+    pass_rate
+
+#### failure_taxonomy
+
+Produces initial and final status distributions for each model.
+
+Initial status:
+
+    iteration 0
+
+Final status:
+
+    PASS if the task succeeded during any allowed iteration
+
+otherwise:
+
+    status of the task's latest attempt
+
+Returned fields:
+
+    model
+    stage
+    status
+    count
+    total
+    rate
+
+#### telemetry_summary
+
+Aggregates model-call telemetry by model.
+
+Returned measurements include:
+
+    attempts
+    fresh_attempts
+    cache_hits
+    total_input_tokens
+    total_output_tokens
+    mean_input_tokens
+    mean_output_tokens
+    mean_model_latency
+    mean_fresh_model_latency
+
+Fresh-call latency excludes:
+
+    cache_hit == true
+
+attempts.
+
+This allows runtime comparisons to avoid treating cache retrieval as fresh model execution.
+
+#### evaluation_summary
+
+Combines pass-rate and telemetry results into one row per model.
+
+Includes:
+
+    total_tasks
+    initial_passed
+    final_passed
+    initial_failures
+    repaired_failures
+    pass_rate_i0
+    pass_rate_i1
+    pass_rate_i2
+    pass_rate_i3
+    improvement_pp
+    repair_recovery_rate
+
+plus the telemetry summary fields.
+
+### Unit Tests
+
+Extended:
+
+    tests/test_results.py
+
+Results-analysis tests now cover:
+
+- loading one JSONL file
+- loading multiple JSONL files
+- cumulative pass counting
+- independent model aggregation
+- initial/final failure taxonomy
+- successful repair represented as final PASS
+- token aggregation
+- cache aggregation
+- latency aggregation
+- fresh-call latency
+- combined model evaluation summary
+
+Result-specific test suite:
+
+    21 passed
+
+### Full Project Regression Test
+
+Command:
+
+    python -m pytest
+
+Result:
+
+    103 passed
+
+No existing project tests regressed.
+
+### Real Evaluation Validation
+
+Loaded official full runs:
+
+    GPT-5.6 Terra
+    qwen2.5-coder:14b
+
+Combined records:
+
+    432
+
+Models:
+
+    ollama:qwen2.5-coder:14b
+    openai:gpt-5.6-terra
+
+### Cumulative Pass@1
+
+qwen2.5-coder:14b:
+
+    iteration 0: 118 / 163 — 72.4%
+    iteration 1: 138 / 163 — 84.7%
+    iteration 2: 140 / 163 — 85.9%
+    iteration 3: 141 / 163 — 86.5%
+
+GPT-5.6 Terra:
+
+    iteration 0: 153 / 163 — 93.9%
+    iteration 1: 161 / 163 — 98.8%
+    iteration 2: 162 / 163 — 99.4%
+    iteration 3: 162 / 163 — 99.4%
+
+These values exactly reproduce the original evaluation-run summaries.
+
+### Failure Taxonomy
+
+qwen2.5-coder:14b initial:
+
+    PASS            118
+    COMPILE_ERROR    30
+    TEST_FAIL        15
+
+qwen2.5-coder:14b final:
+
+    PASS            141
+    COMPILE_ERROR     9
+    TEST_FAIL        13
+
+GPT-5.6 Terra initial:
+
+    PASS            153
+    COMPILE_ERROR     6
+    TEST_FAIL         4
+
+GPT-5.6 Terra final:
+
+    PASS            162
+    TEST_FAIL         1
+
+### Model Comparison
+
+qwen2.5-coder:14b:
+
+    tasks: 163
+    passes: 118 -> 141
+    repaired failures: 23 / 45
+    repair recovery rate: 51.1%
+    absolute improvement: +14.1 percentage points
+
+GPT-5.6 Terra:
+
+    tasks: 163
+    passes: 153 -> 162
+    repaired failures: 9 / 10
+    repair recovery rate: 90.0%
+    absolute improvement: +5.5 percentage points
+
+### Telemetry
+
+qwen2.5-coder:14b:
+
+    attempts: 256
+    fresh attempts: 227
+    cache hits: 29
+    input tokens: 101,202
+    output tokens: 32,010
+    mean input tokens/attempt: 395.3
+    mean output tokens/attempt: 125.0
+    mean recorded model latency: 5.240 s
+    mean fresh-call model latency: 5.070 s
+
+GPT-5.6 Terra:
+
+    attempts: 176
+    fresh attempts: 176
+    cache hits: 0
+    input tokens: 60,917
+    output tokens: 34,052
+    mean input tokens/attempt: 346.1
+    mean output tokens/attempt: 193.5
+    mean recorded model latency: 3.980 s
+    mean fresh-call model latency: 3.980 s
+
+### Interpretation
+
+GPT-5.6 Terra has substantially higher initial and final benchmark accuracy.
+
+The repair loop recovered:
+
+    90.0%
+
+of Terra's initially failing tasks.
+
+The repair loop recovered:
+
+    51.1%
+
+of Qwen's initially failing tasks.
+
+Qwen gained more absolute percentage points because it began with substantially more failures available for repair.
+
+Terra reached:
+
+    99.4%
+
+final cumulative pass@1.
+
+Qwen reached:
+
+    86.5%
+
+final cumulative pass@1.
+
+### Milestone 4 Progress
+
+Completed:
+
+- Step 4.1 — Model telemetry persistence
+- Step 4.2 — Full-run preflight, cost protection, and cache
+- Step 4.3A — Parallel evaluation workers
+- Step 4.3 — Full OpenAI evaluation
+- Step 4.4 — Full Ollama evaluation
+- Step 4.5 — Results aggregation
+
+Remaining:
+
+- Step 4.6 — Evaluation plots and final Milestone 4 verification
+
+### Next Action
+
+Create the Milestone 4 evaluation plots from the reusable aggregation functions:
+
+    pass rate vs repair iteration
+    failure taxonomy at initial and final stages
+
+Then perform final Milestone 4 verification.
+

@@ -4,7 +4,12 @@ from migrate_eval.loop import MigrationAttempt
 from migrate_eval.results import (
     append_attempt,
     attempt_to_record,
+    cumulative_pass_rates,
+    evaluation_summary,
+    failure_taxonomy,
+    load_results,
     prompt_config_hash,
+    telemetry_summary,
     write_run_metadata,
 )
 from migrate_eval.runner import RunResult, RunStatus
@@ -326,3 +331,457 @@ def test_attempt_to_record_persists_cache_hit():
     record = attempt_to_record(attempt)
 
     assert record["cache_hit"] is True
+
+
+
+def test_load_results_reads_jsonl_into_dataframe(tmp_path):
+    path = tmp_path / "run.jsonl"
+
+    path.write_text(
+        json.dumps({
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+        })
+        + "\n"
+        + json.dumps({
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+        })
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dataframe = load_results(path)
+
+    assert len(dataframe) == 2
+    assert set(dataframe["task_id"]) == {"Go/0", "Go/1"}
+    assert (dataframe["source_file"] == str(path)).all()
+
+
+def test_load_results_combines_multiple_files(tmp_path):
+    first = tmp_path / "first.jsonl"
+    second = tmp_path / "second.jsonl"
+
+    first.write_text(
+        json.dumps({
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    second.write_text(
+        json.dumps({
+            "task_id": "Go/1",
+            "model": "model-b",
+            "iteration": 0,
+            "status": "PASS",
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    dataframe = load_results([first, second])
+
+    assert len(dataframe) == 2
+    assert set(dataframe["model"]) == {
+        "model-a",
+        "model-b",
+    }
+
+
+def test_cumulative_pass_rates_counts_pass_by_iteration():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+        },
+        {
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+        },
+        {
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 1,
+            "status": "PASS",
+        },
+        {
+            "task_id": "Go/2",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "COMPILE_ERROR",
+        },
+    ])
+
+    summary = cumulative_pass_rates(
+        dataframe,
+        max_iteration=2,
+    )
+
+    assert list(summary["passed"]) == [1, 2, 2]
+    assert list(summary["total"]) == [3, 3, 3]
+
+
+def test_cumulative_pass_rates_keeps_models_separate():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+        },
+        {
+            "task_id": "Go/0",
+            "model": "model-b",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+        },
+    ])
+
+    summary = cumulative_pass_rates(
+        dataframe,
+        max_iteration=0,
+    )
+
+    model_a = summary[
+        summary["model"] == "model-a"
+    ].iloc[0]
+
+    model_b = summary[
+        summary["model"] == "model-b"
+    ].iloc[0]
+
+    assert model_a["pass_rate"] == 1.0
+    assert model_b["pass_rate"] == 0.0
+
+
+
+def test_failure_taxonomy_reports_initial_and_final_status():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+        },
+        {
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "COMPILE_ERROR",
+        },
+        {
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 1,
+            "status": "PASS",
+        },
+        {
+            "task_id": "Go/2",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+        },
+        {
+            "task_id": "Go/2",
+            "model": "model-a",
+            "iteration": 1,
+            "status": "TEST_FAIL",
+        },
+    ])
+
+    summary = failure_taxonomy(
+        dataframe
+    )
+
+    initial = summary[
+        summary["stage"] == "initial"
+    ]
+
+    final = summary[
+        summary["stage"] == "final"
+    ]
+
+    initial_counts = dict(
+        zip(
+            initial["status"],
+            initial["count"],
+        )
+    )
+
+    final_counts = dict(
+        zip(
+            final["status"],
+            final["count"],
+        )
+    )
+
+    assert initial_counts == {
+        "COMPILE_ERROR": 1,
+        "PASS": 1,
+        "TEST_FAIL": 1,
+    }
+
+    assert final_counts == {
+        "PASS": 2,
+        "TEST_FAIL": 1,
+    }
+
+
+def test_failure_taxonomy_treats_any_pass_as_final_pass():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+        },
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 1,
+            "status": "PASS",
+        },
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 2,
+            "status": "TEST_FAIL",
+        },
+    ])
+
+    summary = failure_taxonomy(
+        dataframe
+    )
+
+    final = summary[
+        summary["stage"] == "final"
+    ]
+
+    assert len(final) == 1
+    assert final.iloc[0]["status"] == "PASS"
+    assert final.iloc[0]["count"] == 1
+
+
+def test_telemetry_summary_aggregates_tokens_and_latency():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "model": "model-a",
+            "model_duration": 2.0,
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "cache_hit": False,
+        },
+        {
+            "model": "model-a",
+            "model_duration": 4.0,
+            "input_tokens": 200,
+            "output_tokens": 40,
+            "cache_hit": True,
+        },
+        {
+            "model": "model-a",
+            "model_duration": 6.0,
+            "input_tokens": 300,
+            "output_tokens": 60,
+            "cache_hit": False,
+        },
+    ])
+
+    summary = telemetry_summary(
+        dataframe
+    )
+
+    row = summary.iloc[0]
+
+    assert row["attempts"] == 3
+    assert row["fresh_attempts"] == 2
+    assert row["cache_hits"] == 1
+
+    assert (
+        row["total_input_tokens"]
+        == 600
+    )
+
+    assert (
+        row["total_output_tokens"]
+        == 120
+    )
+
+    assert (
+        row["mean_input_tokens"]
+        == 200.0
+    )
+
+    assert (
+        row["mean_output_tokens"]
+        == 40.0
+    )
+
+    assert (
+        row["mean_model_latency"]
+        == 4.0
+    )
+
+    assert (
+        row["mean_fresh_model_latency"]
+        == 4.0
+    )
+
+
+def test_telemetry_summary_keeps_models_separate():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "model": "model-a",
+            "model_duration": 1.0,
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_hit": False,
+        },
+        {
+            "model": "model-b",
+            "model_duration": 3.0,
+            "input_tokens": 30,
+            "output_tokens": 15,
+            "cache_hit": False,
+        },
+    ])
+
+    summary = telemetry_summary(
+        dataframe
+    )
+
+    assert set(
+        summary["model"]
+    ) == {
+        "model-a",
+        "model-b",
+    }
+
+    assert len(summary) == 2
+
+
+
+def test_evaluation_summary_combines_pass_and_telemetry():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+            "model_duration": 2.0,
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "cache_hit": False,
+        },
+        {
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+            "model_duration": 4.0,
+            "input_tokens": 200,
+            "output_tokens": 40,
+            "cache_hit": False,
+        },
+        {
+            "task_id": "Go/1",
+            "model": "model-a",
+            "iteration": 1,
+            "status": "PASS",
+            "model_duration": 6.0,
+            "input_tokens": 300,
+            "output_tokens": 60,
+            "cache_hit": False,
+        },
+    ])
+
+    summary = evaluation_summary(
+        dataframe,
+        max_iteration=1,
+    )
+
+    row = summary.iloc[0]
+
+    assert row["model"] == "model-a"
+    assert row["total_tasks"] == 2
+    assert row["initial_passed"] == 1
+    assert row["final_passed"] == 2
+    assert row["initial_failures"] == 1
+    assert row["repaired_failures"] == 1
+    assert row["pass_rate_i0"] == 0.5
+    assert row["pass_rate_i1"] == 1.0
+    assert row["improvement_pp"] == 50.0
+    assert row["repair_recovery_rate"] == 1.0
+    assert row["attempts"] == 3
+    assert row["fresh_attempts"] == 3
+    assert row["cache_hits"] == 0
+    assert row["total_input_tokens"] == 600
+    assert row["total_output_tokens"] == 120
+    assert row["mean_model_latency"] == 4.0
+    assert row["mean_fresh_model_latency"] == 4.0
+
+
+def test_evaluation_summary_keeps_models_separate():
+    import pandas as pd
+
+    dataframe = pd.DataFrame([
+        {
+            "task_id": "Go/0",
+            "model": "model-a",
+            "iteration": 0,
+            "status": "PASS",
+            "model_duration": 1.0,
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_hit": False,
+        },
+        {
+            "task_id": "Go/0",
+            "model": "model-b",
+            "iteration": 0,
+            "status": "TEST_FAIL",
+            "model_duration": 2.0,
+            "input_tokens": 20,
+            "output_tokens": 10,
+            "cache_hit": False,
+        },
+    ])
+
+    summary = evaluation_summary(
+        dataframe,
+        max_iteration=0,
+    )
+
+    assert len(summary) == 2
+
+    assert set(
+        summary["model"]
+    ) == {
+        "model-a",
+        "model-b",
+    }
