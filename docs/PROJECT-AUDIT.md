@@ -5174,3 +5174,210 @@ Commit Step 4.2.
 
 Then begin the official full 163-problem GPT-5.6 Terra evaluation with up to three repair rounds.
 
+
+## Step 4.3A — Parallel Evaluation Support
+
+### Status
+
+Completed.
+
+### Goal
+
+Allow independent HumanEval-X benchmark problems to execute concurrently so the full API-based evaluation can finish substantially faster.
+
+Repair iterations for an individual problem remain sequential because each repair depends on the previous compiler or test result.
+
+### Files Modified
+
+    src/migrate_eval/cli.py
+    src/migrate_eval/results.py
+    tests/test_cli.py
+
+### CLI Option
+
+Added:
+
+    --workers
+
+Default:
+
+    1
+
+Example:
+
+    migrate-eval run \
+      --model openai:gpt-5.6-terra \
+      --n 163 \
+      --iters 3 \
+      --workers 4
+
+A default of one worker preserves the original sequential behavior.
+
+### Parallel Execution Design
+
+Parallelism operates across benchmark problems.
+
+For example:
+
+    worker 1 -> Go/0 -> repairs if needed
+    worker 2 -> Go/1 -> repairs if needed
+    worker 3 -> Go/2 -> repairs if needed
+    worker 4 -> Go/3 -> repairs if needed
+
+Each problem's internal repair sequence remains:
+
+    iteration 0
+    -> iteration 1
+    -> iteration 2
+    -> iteration 3
+
+and therefore remains sequential.
+
+### Thread-Safe Model Design
+
+Model adapters contain mutable per-call telemetry including:
+
+    last_input_tokens
+    last_output_tokens
+    last_model_duration
+    last_cache_hit
+
+Therefore a single adapter instance is not shared between worker threads.
+
+Each concurrent benchmark problem receives its own:
+
+    model adapter
+    +
+    CachedModelAdapter
+
+All workers share the same disk cache directory.
+
+### Result Persistence
+
+Worker threads perform model generation, extraction, repair, and Docker oracle execution.
+
+Completed problem results are returned to the main thread.
+
+The main thread performs:
+
+    JSONL append
+    cost accounting
+    terminal output
+
+This avoids concurrent JSONL writes.
+
+### Output Ordering
+
+Parallel runs may print problems in completion order rather than task-number order.
+
+Example observed:
+
+    Go/3
+    Go/0
+    Go/2
+    Go/1
+
+This is expected and does not affect benchmark correctness because each record includes its task_id and iteration.
+
+### Cost Limit Behavior
+
+The soft --max-cost limit remains supported.
+
+When multiple workers are active, already-running tasks are allowed to finish after the cost threshold is reached.
+
+No additional problems are submitted after the threshold is detected.
+
+Therefore a parallel run may exceed the soft limit by the cost of already-running problems.
+
+### Run Metadata
+
+The number of configured workers is now stored in:
+
+    <run_id>.meta.json
+
+under:
+
+    workers
+
+### Tests Added
+
+Parallel CLI tests verify:
+
+- two benchmark problems actually execute concurrently;
+- final pass-rate aggregation remains correct;
+- worker count is persisted in metadata;
+- cost-limit detection stops submission of new problems;
+- already-running parallel problems are allowed to finish.
+
+### Targeted Verification
+
+Command:
+
+    python -m pytest \
+      tests/test_cli.py \
+      tests/test_results.py \
+      -v
+
+Result:
+
+    21 passed
+
+### Full Harness Regression
+
+Command:
+
+    make test
+
+Result:
+
+    93 passed
+
+### Real Parallel OpenAI Smoke Test
+
+Command:
+
+    migrate-eval run \
+      --model openai:gpt-5.6-terra \
+      --n 4 \
+      --iters 0 \
+      --workers 4 \
+      --max-cost 0.10
+
+A temporary results directory was used so the official benchmark cache remained untouched.
+
+Results:
+
+    Go/0 PASS
+    Go/1 PASS
+    Go/2 COMPILE_ERROR
+    Go/3 PASS
+
+pass@1:
+
+    3/4
+    75.0%
+
+Estimated API cost:
+
+    $0.0060
+
+The tasks completed in non-sequential order, confirming actual concurrent execution.
+
+### Conclusion
+
+Parallel benchmark execution is ready for the full OpenAI evaluation.
+
+Recommended configuration:
+
+    OpenAI: 4 workers
+
+Local Ollama evaluation will initially remain at:
+
+    1 worker
+
+because multiple simultaneous local generations may compete for the same GPU and unified memory.
+
+### Next Action
+
+Run the official 163-problem GPT-5.6 Terra evaluation with up to three repair rounds and four concurrent workers.
+

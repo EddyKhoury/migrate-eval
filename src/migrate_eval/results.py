@@ -85,6 +85,7 @@ def write_run_metadata(
     temperature: float | None,
     prompt_hash: str,
     max_cost_usd: float | None = None,
+    workers: int = 1,
 ) -> None:
     """Write reproducibility metadata for one evaluation run."""
 
@@ -109,6 +110,7 @@ def write_run_metadata(
         "temperature": temperature,
         "prompt_hash": prompt_hash,
         "max_cost_usd": max_cost_usd,
+        "workers": workers,
     }
 
     with path.open(

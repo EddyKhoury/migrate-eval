@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    wait,
+)
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -146,6 +151,15 @@ def run(
         min=0,
         help="Number of repair iterations.",
     ),
+    workers: int = typer.Option(
+        1,
+        "--workers",
+        min=1,
+        help=(
+            "Number of benchmark problems to evaluate concurrently. "
+            "Repair iterations within one problem remain sequential."
+        ),
+    ),
     java_dataset: Path = typer.Option(
         Path(
             "data/humaneval_x/"
@@ -266,20 +280,22 @@ def run(
         ),
         prompt_hash=_current_prompt_hash(),
         max_cost_usd=max_cost,
+        workers=workers,
     )
 
     attempts_by_problem = []
     estimated_cost_usd = 0.0
+    cost_limit_reached = False
 
-    for position, problem in enumerate(
-        selected,
-        start=1,
-    ):
-        attempts = migrate(
-            problem,
-            adapter,
-            iters=iters,
-        )
+    def record_problem_result(
+        *,
+        position: int,
+        problem,
+        attempts,
+    ) -> bool:
+        """Persist one completed problem and update run cost."""
+
+        nonlocal estimated_cost_usd
 
         attempts_by_problem.append(
             attempts
@@ -312,17 +328,139 @@ def run(
             f"(iteration {final_attempt.iteration})"
         )
 
-        if (
+        return (
             max_cost is not None
             and estimated_cost_usd >= max_cost
+        )
+
+    if workers == 1:
+        for position, problem in enumerate(
+            selected,
+            start=1,
         ):
-            typer.echo(
-                "Cost limit reached after current problem: "
-                f"${estimated_cost_usd:.4f} "
-                f">= ${max_cost:.4f}. "
-                "Stopping before the next problem."
+            attempts = migrate(
+                problem,
+                adapter,
+                iters=iters,
             )
-            break
+
+            cost_limit_reached = (
+                record_problem_result(
+                    position=position,
+                    problem=problem,
+                    attempts=attempts,
+                )
+            )
+
+            if cost_limit_reached:
+                typer.echo(
+                    "Cost limit reached after current problem: "
+                    f"${estimated_cost_usd:.4f} "
+                    f">= ${max_cost:.4f}. "
+                    "Stopping before the next problem."
+                )
+                break
+
+    else:
+        cache_dir = (
+            results_dir
+            / ".cache"
+        )
+
+        def evaluate_problem(problem):
+            # Each concurrent problem receives its own adapter.
+            # Model adapters keep mutable per-call telemetry and
+            # therefore must not be shared between worker threads.
+            worker_adapter = CachedModelAdapter(
+                create_model_adapter(
+                    model
+                ),
+                cache_dir=cache_dir,
+            )
+
+            return migrate(
+                problem,
+                worker_adapter,
+                iters=iters,
+            )
+
+        with ThreadPoolExecutor(
+            max_workers=workers,
+        ) as executor:
+            next_index = 0
+            pending = {}
+
+            def submit_available() -> None:
+                nonlocal next_index
+
+                while (
+                    next_index
+                    < len(selected)
+                    and len(pending)
+                    < workers
+                ):
+                    position = (
+                        next_index + 1
+                    )
+
+                    problem = selected[
+                        next_index
+                    ]
+
+                    future = executor.submit(
+                        evaluate_problem,
+                        problem,
+                    )
+
+                    pending[future] = (
+                        position,
+                        problem,
+                    )
+
+                    next_index += 1
+
+            submit_available()
+
+            while pending:
+                completed, _ = wait(
+                    pending,
+                    return_when=FIRST_COMPLETED,
+                )
+
+                for future in completed:
+                    (
+                        position,
+                        problem,
+                    ) = pending.pop(
+                        future
+                    )
+
+                    attempts = (
+                        future.result()
+                    )
+
+                    reached = (
+                        record_problem_result(
+                            position=position,
+                            problem=problem,
+                            attempts=attempts,
+                        )
+                    )
+
+                    if reached:
+                        cost_limit_reached = True
+
+                if not cost_limit_reached:
+                    submit_available()
+
+        if cost_limit_reached:
+            typer.echo(
+                "Cost limit reached. "
+                "No additional problems were started; "
+                "already-running problems were allowed to finish. "
+                f"Final estimated cost: "
+                f"${estimated_cost_usd:.4f}."
+            )
 
     typer.echo("")
     typer.echo(
