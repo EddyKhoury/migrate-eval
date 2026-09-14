@@ -14,6 +14,8 @@ class FakeModel:
         self.response = response
         self.error = error
         self.prompts: list[str] = []
+        self.last_input_tokens: int | None = None
+        self.last_output_tokens: int | None = None
 
     def complete(self, prompt: str) -> str:
         self.prompts.append(prompt)
