@@ -542,11 +542,19 @@ def evaluation_summary(
             ),
         }
 
-        for pass_row in model_passes.itertuples():
+        for iteration, pass_rate in model_passes[
+            [
+                "iteration",
+                "pass_rate",
+            ]
+        ].itertuples(
+            index=False,
+            name=None,
+        ):
             row[
-                f"pass_rate_i{pass_row.iteration}"
+                f"pass_rate_i{int(iteration)}"
             ] = float(
-                pass_row.pass_rate
+                pass_rate
             )
 
         model_telemetry = telemetry[

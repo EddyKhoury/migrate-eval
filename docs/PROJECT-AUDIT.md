@@ -6260,3 +6260,180 @@ Create the Milestone 4 evaluation plots from the reusable aggregation functions:
 
 Then perform final Milestone 4 verification.
 
+
+## Step 4.6 — Evaluation Plots and Final Milestone 4 Verification
+
+### Status
+
+Completed.
+
+### Goal
+
+Produce the final visual evaluation artifacts required for Milestone 4 and verify the complete evaluation pipeline.
+
+### Plotting Script
+
+Created:
+
+    scripts/plot_results.py
+
+The script loads evaluation JSONL files through the reusable aggregation layer in:
+
+    src/migrate_eval/results.py
+
+and generates the required plots.
+
+### Plot 1 — Pass Rate vs Repair Iteration
+
+Generated:
+
+    results/plots/pass_rate_vs_iteration.png
+
+The plot shows cumulative pass@1 for both evaluated models across iterations 0–3.
+
+GPT-5.6 Terra:
+
+    iteration 0: 93.9%
+    iteration 1: 98.8%
+    iteration 2: 99.4%
+    iteration 3: 99.4%
+
+qwen2.5-coder:14b:
+
+    iteration 0: 72.4%
+    iteration 1: 84.7%
+    iteration 2: 85.9%
+    iteration 3: 86.5%
+
+The plot was visually inspected and confirmed to match the underlying evaluation results.
+
+### Plot 2 — Failure Taxonomy
+
+Generated:
+
+    results/plots/failure_taxonomy.png
+
+The chart compares initial and final failure counts.
+
+qwen2.5-coder:14b:
+
+    initial failures: 45
+        COMPILE_ERROR: 30
+        TEST_FAIL: 15
+
+    final failures: 22
+        COMPILE_ERROR: 9
+        TEST_FAIL: 13
+
+GPT-5.6 Terra:
+
+    initial failures: 10
+        COMPILE_ERROR: 6
+        TEST_FAIL: 4
+
+    final failures: 1
+        COMPILE_ERROR: 0
+        TEST_FAIL: 1
+
+The plot was visually inspected and confirmed to match the aggregation output.
+
+### Static Analysis Cleanup
+
+The pandas iteration code in:
+
+    evaluation_summary
+
+was adjusted to avoid Pylance attribute warnings from dynamically generated `itertuples()` namedtuple fields.
+
+The implementation now uses:
+
+    itertuples(index=False, name=None)
+
+for explicit tuple unpacking.
+
+Result-specific regression test:
+
+    21 passed
+
+### Final Regression Test
+
+Command:
+
+    python -m pytest
+
+Result:
+
+    103 passed
+
+No regressions were detected.
+
+The plotting script also passed Python bytecode compilation:
+
+    python -m py_compile scripts/plot_results.py
+
+### Final Evaluation Summary
+
+GPT-5.6 Terra:
+
+    initial pass@1: 93.9%
+    final pass@1: 99.4%
+    improvement: +5.5 percentage points
+    failures repaired: 9 / 10
+    repair recovery rate: 90.0%
+
+qwen2.5-coder:14b:
+
+    initial pass@1: 72.4%
+    final pass@1: 86.5%
+    improvement: +14.1 percentage points
+    failures repaired: 23 / 45
+    repair recovery rate: 51.1%
+
+### Milestone 4 Exit Criteria
+
+Full evaluation across the validated 163-problem benchmark:
+
+    complete
+
+Two evaluated models:
+
+    complete
+
+Cumulative pass@1 at iterations 0–3:
+
+    complete
+
+Failure taxonomy:
+
+    complete
+
+Token and latency telemetry:
+
+    complete
+
+Results aggregation:
+
+    complete
+
+Pass-rate plot:
+
+    complete
+
+Failure-taxonomy plot:
+
+    complete
+
+README results table:
+
+    complete
+
+Full regression suite:
+
+    103 passed
+
+### Milestone 4 Status
+
+MILESTONE 4 — FULL EVALUATION: COMPLETE
+
+The project now has reproducible full-benchmark measurements showing both single-shot migration performance and the effect of test-driven repair across two substantially different model configurations.
+
