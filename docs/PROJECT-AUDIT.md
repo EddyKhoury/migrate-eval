@@ -5381,3 +5381,240 @@ because multiple simultaneous local generations may compete for the same GPU and
 
 Run the official 163-problem GPT-5.6 Terra evaluation with up to three repair rounds and four concurrent workers.
 
+
+## Step 4.3 — Full OpenAI Evaluation
+
+### Status
+
+Completed.
+
+### Goal
+
+Run GPT-5.6 Terra across the complete validated HumanEval-X Java-to-Go benchmark with up to three repair iterations.
+
+### Evaluation Configuration
+
+Model:
+
+    openai:gpt-5.6-terra
+
+Validated benchmark size:
+
+    163 problems
+
+Excluded benchmark item:
+
+    Go/95
+
+Repair configuration:
+
+    iteration 0 = initial migration
+    iterations 1-3 = repair rounds
+
+Concurrent workers:
+
+    4
+
+Cost safety limit:
+
+    $3.00
+
+Command:
+
+    migrate-eval run \
+      --model openai:gpt-5.6-terra \
+      --n 163 \
+      --iters 3 \
+      --workers 4 \
+      --max-cost 3.00
+
+### Result Files
+
+JSONL:
+
+    results/openai__gpt-5.6-terra/
+    20260914T125653Z-c85029de.jsonl
+
+Metadata:
+
+    results/openai__gpt-5.6-terra/
+    20260914T125653Z-c85029de.meta.json
+
+### Run Integrity Validation
+
+JSONL records:
+
+    176
+
+Unique benchmark tasks:
+
+    163
+
+Missing tasks:
+
+    none
+
+Unexpected tasks:
+
+    none
+
+Duplicate task/iteration records:
+
+    none
+
+Tasks missing iteration 0:
+
+    none
+
+Cache hits:
+
+    0
+
+The official run therefore contains a fresh model evaluation for the complete validated benchmark.
+
+### Cumulative Pass Rate
+
+    iteration 0: 153 / 163 — 93.9%
+    iteration 1: 161 / 163 — 98.8%
+    iteration 2: 162 / 163 — 99.4%
+    iteration 3: 162 / 163 — 99.4%
+
+Absolute improvement from iteration 0 to final:
+
+    +5.5 percentage points
+
+Initial failures:
+
+    10
+
+Failures repaired:
+
+    9 / 10
+    90%
+
+### Initial Failure Taxonomy
+
+At iteration 0:
+
+    PASS           153
+    COMPILE_ERROR    6
+    TEST_FAIL        4
+
+No initial failures were classified as:
+
+    TIMEOUT
+    EXTRACT_ERROR
+    MODEL_ERROR
+
+### Repair Progress
+
+After repair iteration 1:
+
+    161 / 163 PASS
+
+Therefore the first repair round recovered:
+
+    8 of the 10 initial failures
+
+After repair iteration 2:
+
+    162 / 163 PASS
+
+The second repair round recovered:
+
+    1 additional failure
+
+Iteration 3 produced:
+
+    no additional passes
+
+### Final Failure Taxonomy
+
+Final status:
+
+    PASS       162
+    TEST_FAIL    1
+
+Only one benchmark problem remained unresolved:
+
+    Go/160
+
+Final status:
+
+    TEST_FAIL
+
+Final iteration:
+
+    3
+
+### Model Telemetry
+
+Total input tokens:
+
+    60,917
+
+Total output tokens:
+
+    34,052
+
+Mean model-call latency:
+
+    3.98 seconds
+
+Total model attempts:
+
+    176
+
+### API Cost
+
+Reported evaluation cost:
+
+    $0.5305
+
+The full 163-problem GPT-5.6 Terra benchmark therefore remained well below the configured:
+
+    $3.00
+
+safety limit.
+
+### Main Finding
+
+GPT-5.6 Terra achieved:
+
+    93.9%
+
+single-shot pass@1 on the validated 163-problem Java-to-Go benchmark.
+
+Allowing test-driven repair increased cumulative pass@1 to:
+
+    99.4%
+
+The repair loop successfully recovered:
+
+    9 / 10
+
+initially failing migrations.
+
+Most of the improvement occurred during the first repair iteration.
+
+### Milestone 4 Progress
+
+Completed:
+
+- Step 4.1 — Model telemetry persistence
+- Step 4.2 — Full-run preflight, cost protection, and model cache
+- Step 4.3A — Parallel evaluation support
+- Step 4.3 — Full OpenAI evaluation
+
+Remaining:
+
+- Step 4.4 — Full Ollama evaluation
+- Step 4.5 — Results aggregation
+- Step 4.6 — Evaluation plots and final Milestone 4 verification
+
+### Next Action
+
+Commit the validated GPT-5.6 Terra full-evaluation results and audit update.
+
+Then begin Step 4.4 — Full Ollama Evaluation.
+
