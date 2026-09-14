@@ -5618,3 +5618,325 @@ Commit the validated GPT-5.6 Terra full-evaluation results and audit update.
 
 Then begin Step 4.4 — Full Ollama Evaluation.
 
+
+## Step 4.4 — Full Ollama Evaluation
+
+### Status
+
+Completed.
+
+### Goal
+
+Run the local qwen2.5-coder:14b model across the complete validated HumanEval-X Java-to-Go benchmark with up to three repair iterations.
+
+### Evaluation Configuration
+
+Model:
+
+    ollama:qwen2.5-coder:14b
+
+Validated benchmark size:
+
+    163 problems
+
+Excluded benchmark item:
+
+    Go/95
+
+Repair configuration:
+
+    iteration 0 = initial migration
+    iterations 1-3 = repair rounds
+
+Concurrent workers:
+
+    2
+
+Command:
+
+    migrate-eval run \
+      --model ollama:qwen2.5-coder:14b \
+      --n 163 \
+      --iters 3 \
+      --workers 2
+
+### Worker Selection Preflight
+
+A small four-problem timing comparison was performed before the full run.
+
+One worker:
+
+    4/4 PASS
+    elapsed time: 1:20.95
+
+Two workers:
+
+    4/4 PASS
+    elapsed time: 39.18 seconds
+
+Two workers were therefore approximately:
+
+    2.07x faster
+
+for the measured sample.
+
+The official evaluation used:
+
+    2 workers
+
+### Result Files
+
+JSONL:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260914T132926Z-8fc0f7f9.jsonl
+
+Metadata:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260914T132926Z-8fc0f7f9.meta.json
+
+### Run Integrity Validation
+
+JSONL records:
+
+    256
+
+Unique benchmark tasks:
+
+    163
+
+Missing tasks:
+
+    none
+
+Unexpected tasks:
+
+    none
+
+Duplicate task/iteration records:
+
+    none
+
+Tasks missing iteration 0:
+
+    none
+
+The full validated benchmark is therefore represented exactly once at iteration 0, with repair attempts recorded where required.
+
+### Cumulative Pass Rate
+
+    iteration 0: 118 / 163 — 72.4%
+    iteration 1: 138 / 163 — 84.7%
+    iteration 2: 140 / 163 — 85.9%
+    iteration 3: 141 / 163 — 86.5%
+
+Absolute improvement from iteration 0 to final:
+
+    +14.1 percentage points
+
+Initial failures:
+
+    45
+
+Failures repaired:
+
+    23 / 45
+    51.1%
+
+### Repair Progress
+
+The first repair iteration recovered:
+
+    20 additional problems
+
+Pass count therefore increased from:
+
+    118
+    to
+    138
+
+The second repair iteration recovered:
+
+    2 additional problems
+
+Pass count increased to:
+
+    140
+
+The third repair iteration recovered:
+
+    1 additional problem
+
+Final pass count:
+
+    141
+
+Most repair-loop improvement therefore occurred during the first repair iteration.
+
+### Initial Failure Taxonomy
+
+At iteration 0:
+
+    PASS            118
+    COMPILE_ERROR    30
+    TEST_FAIL        15
+
+No initial failures were classified as:
+
+    TIMEOUT
+    EXTRACT_ERROR
+    MODEL_ERROR
+
+### Final Failure Taxonomy
+
+After all repair rounds:
+
+    PASS            141
+    COMPILE_ERROR     9
+    TEST_FAIL        13
+
+Residual failures:
+
+    22
+
+Final COMPILE_ERROR tasks:
+
+    Go/10
+    Go/12
+    Go/26
+    Go/29
+    Go/32
+    Go/38
+    Go/44
+    Go/124
+    Go/127
+
+Final TEST_FAIL tasks:
+
+    Go/7
+    Go/16
+    Go/30
+    Go/87
+    Go/89
+    Go/96
+    Go/104
+    Go/117
+    Go/134
+    Go/136
+    Go/145
+    Go/149
+    Go/160
+
+### Model Telemetry
+
+Total input tokens recorded:
+
+    101,202
+
+Total output tokens recorded:
+
+    32,010
+
+Mean recorded model latency:
+
+    5.24 seconds
+
+### Cache Usage
+
+Cache hits:
+
+    29
+
+These attempts reused previously cached completions for an identical:
+
+    model
+    +
+    prompt
+
+combination.
+
+The cache does not change the generated response associated with that exact prompt; it avoids recomputing the same completion.
+
+The benchmark pass-rate calculation therefore remains valid.
+
+However, cached calls should not be treated as fresh runtime measurements.
+
+For later latency analysis, Step 4.5 will distinguish:
+
+    all recorded attempts
+
+from:
+
+    cache_hit == false
+
+fresh model calls.
+
+This prevents cache reuse from distorting model-latency comparisons.
+
+### Main Finding
+
+qwen2.5-coder:14b achieved:
+
+    72.4%
+
+single-shot pass@1 on the validated 163-problem Java-to-Go benchmark.
+
+Allowing up to three test-driven repair rounds increased cumulative pass@1 to:
+
+    86.5%
+
+The repair loop recovered:
+
+    23 / 45
+    51.1%
+
+initially failing migrations.
+
+The absolute improvement:
+
+    +14.1 percentage points
+
+was larger than the absolute repair improvement observed for GPT-5.6 Terra, although the final overall pass rate remained substantially lower.
+
+### Full Model Comparison So Far
+
+GPT-5.6 Terra:
+
+    iteration 0: 93.9%
+    iteration 3: 99.4%
+    improvement: +5.5 percentage points
+
+qwen2.5-coder:14b:
+
+    iteration 0: 72.4%
+    iteration 3: 86.5%
+    improvement: +14.1 percentage points
+
+Interpretation:
+
+The stronger model started much closer to the benchmark ceiling, leaving fewer failures available for repair.
+
+The local Qwen model began with substantially more failures, and the repair loop recovered a larger absolute share of benchmark problems.
+
+### Milestone 4 Progress
+
+Completed:
+
+- Step 4.1 — Model telemetry persistence
+- Step 4.2 — Full-run preflight, cost protection, and model cache
+- Step 4.3A — Parallel evaluation support
+- Step 4.3 — Full OpenAI evaluation
+- Step 4.4 — Full Ollama evaluation
+
+Remaining:
+
+- Step 4.5 — Results aggregation
+- Step 4.6 — Evaluation plots and final Milestone 4 verification
+
+### Next Action
+
+Commit the validated Ollama full-evaluation audit.
+
+Then begin Step 4.5 — Results Aggregation.
+
