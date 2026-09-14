@@ -4891,3 +4891,286 @@ Not yet completed:
 
 Commit Step 4.1 before beginning the full-evaluation preflight and cost-safety work.
 
+
+## Step 4.2 — Full-Run Preflight, Cost Protection, and Model Cache
+
+### Status
+
+Completed.
+
+### Goal
+
+Prepare the evaluation harness for the full 163-problem benchmark before launching expensive or long-running model evaluations.
+
+This step added:
+
+- API cost estimation;
+- a configurable cost safety limit;
+- real-run cost validation;
+- persistent model-response caching;
+- cache-aware cost accounting.
+
+### Cost Estimation
+
+Created:
+
+    src/migrate_eval/costs.py
+
+The evaluation harness now supports configured per-token pricing for:
+
+    openai:gpt-5.6-terra
+
+Configured rates:
+
+    input:  $2.00 per 1M tokens
+    output: $12.00 per 1M tokens
+
+Cost is calculated using the token telemetry persisted in Step 4.1.
+
+If token telemetry or model pricing is unavailable, no cost estimate is produced.
+
+### --max-cost Safety Limit
+
+The CLI now supports:
+
+    --max-cost <USD>
+
+Example:
+
+    migrate-eval run \
+      --model openai:gpt-5.6-terra \
+      --n 163 \
+      --iters 3 \
+      --max-cost 3.00
+
+The limit is a soft per-run safety limit.
+
+Cost is checked after each benchmark problem completes.
+
+If the accumulated estimated API cost reaches or exceeds the configured limit, the harness stops before starting the next problem.
+
+This prevents an unexpectedly expensive evaluation from continuing indefinitely.
+
+### Early-Stop Reporting
+
+When a cost-limited run stops early, pass-rate reporting now uses:
+
+    actually evaluated problems
+
+rather than the originally selected problem count.
+
+This prevents incorrect denominators in partial runs.
+
+### Run Metadata
+
+The configured cost limit is recorded in:
+
+    <run_id>.meta.json
+
+under:
+
+    max_cost_usd
+
+### Real OpenAI Preflight
+
+A real five-problem GPT-5.6 Terra evaluation was executed:
+
+    migrate-eval run \
+      --model openai:gpt-5.6-terra \
+      --n 5 \
+      --iters 3 \
+      --max-cost 1.00
+
+Results:
+
+    Go/0 PASS iteration 0
+    Go/1 PASS iteration 0
+    Go/2 PASS iteration 2
+    Go/3 PASS iteration 0
+    Go/4 PASS iteration 0
+
+Cumulative pass rates:
+
+    iteration 0: 4/5 — 80.0%
+    iteration 1: 4/5 — 80.0%
+    iteration 2: 5/5 — 100.0%
+    iteration 3: 5/5 — 100.0%
+
+Model attempts:
+
+    7
+
+Observed telemetry:
+
+    total input tokens:   1,979
+    total output tokens:  1,466
+    mean model latency:   4.162 seconds
+
+Estimated API cost:
+
+    $0.0216
+
+The independently calculated token cost matched the CLI estimate.
+
+### Full-Run Cost Estimate
+
+Scaling the five-problem preflight directly to the validated 163-problem benchmark gives an approximate expected cost of:
+
+    ~$0.70
+
+Actual cost will depend on how many repair rounds are required.
+
+A larger safety limit can therefore be used for the official evaluation without materially risking unexpected spend.
+
+### Persistent Model Completion Cache
+
+Created:
+
+    src/migrate_eval/cache.py
+
+Implemented:
+
+    CachedModelAdapter
+    completion_cache_key(...)
+
+Cache keys are generated from:
+
+    model name
+    +
+    exact prompt text
+
+using SHA-256.
+
+This means an identical model/prompt request can reuse the previously generated completion without another provider request.
+
+### Cache Storage
+
+The CLI automatically stores model completions beneath:
+
+    <results-dir>/.cache/
+
+Cache records preserve:
+
+    model
+    response
+    input_tokens
+    output_tokens
+    model_duration
+
+### Cache Telemetry
+
+MigrationAttempt now records:
+
+    cache_hit
+
+The field is also persisted in JSONL.
+
+This allows later analysis to distinguish:
+
+    real model calls
+    cached model calls
+
+### Cache-Aware Cost Accounting
+
+Cached completions retain their original token counts for reproducibility and analysis.
+
+However:
+
+    cache_hit = true
+
+attempts do not contribute to the current run's estimated API spend.
+
+Therefore rerunning an identical evaluation does not falsely report previously paid API cost as new spend.
+
+### Real Cache Verification
+
+A dedicated temporary results directory was used:
+
+    /tmp/migrate-eval-cache-check
+
+The same real GPT-5.6 Terra evaluation was executed twice.
+
+First execution:
+
+    Go/0 PASS
+    Estimated API cost: $0.0018
+
+Second identical execution:
+
+    Go/0 PASS
+    Estimated API cost: $0.0000
+
+The second execution reused the disk cache and did not require another paid OpenAI completion.
+
+The temporary directory ensured this verification did not populate the cache intended for the official full evaluation.
+
+### Tests Added
+
+Cost tests cover:
+
+- configured GPT-5.6 Terra pricing;
+- token-to-cost calculation;
+- unknown-model handling;
+- missing token telemetry.
+
+CLI tests cover:
+
+- unsupported pricing rejection;
+- cost-limit stopping;
+- correct partial-run denominator;
+- cached attempts not counted as new API spend.
+
+Cache tests cover:
+
+- stable cache keys;
+- cache misses invoking the wrapped model;
+- cache hits avoiding repeated model calls;
+- token/latency telemetry restoration;
+- different prompts producing independent cache entries.
+
+Results tests cover:
+
+- cache-hit persistence in JSONL.
+
+### Step-Specific Verification
+
+Cost/CLI/results targeted suite:
+
+    21 passed
+
+Cache/CLI/loop/results targeted suite:
+
+    35 passed
+
+### Full Harness Regression
+
+Command:
+
+    make test
+
+Result:
+
+    91 passed
+
+No existing Milestone 0–3 behavior was broken.
+
+### Milestone 4 Progress
+
+Completed:
+
+- Step 4.1 — Model telemetry persistence
+- Step 4.2 — Full-run preflight, cost protection, and model cache
+
+Remaining:
+
+- Step 4.3 — Full OpenAI evaluation
+- Step 4.4 — Full Ollama evaluation
+- Step 4.5 — Results aggregation
+- Step 4.6 — Evaluation plots and final Milestone 4 verification
+
+### Next Action
+
+Commit Step 4.2.
+
+Then begin the official full 163-problem GPT-5.6 Terra evaluation with up to three repair rounds.
+

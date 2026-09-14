@@ -23,6 +23,7 @@ def attempt_to_record(
         "model_duration": attempt.model_duration,
         "input_tokens": attempt.input_tokens,
         "output_tokens": attempt.output_tokens,
+        "cache_hit": attempt.cache_hit,
         "prompt": attempt.prompt,
         "raw_response": attempt.raw_response,
         "go_code": attempt.go_code,
@@ -83,6 +84,7 @@ def write_run_metadata(
     excluded_task_ids: Sequence[str],
     temperature: float | None,
     prompt_hash: str,
+    max_cost_usd: float | None = None,
 ) -> None:
     """Write reproducibility metadata for one evaluation run."""
 
@@ -106,6 +108,7 @@ def write_run_metadata(
         "excluded_task_ids": list(excluded_task_ids),
         "temperature": temperature,
         "prompt_hash": prompt_hash,
+        "max_cost_usd": max_cost_usd,
     }
 
     with path.open(

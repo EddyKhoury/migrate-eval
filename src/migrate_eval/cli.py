@@ -9,6 +9,11 @@ from uuid import uuid4
 import typer
 from dotenv import load_dotenv
 
+from migrate_eval.cache import CachedModelAdapter
+from migrate_eval.costs import (
+    estimate_model_cost_usd,
+    has_pricing,
+)
 from migrate_eval.dataset import (
     build_migration_problems,
     load_go_problems,
@@ -159,6 +164,14 @@ def run(
         Path("results"),
         "--results-dir",
     ),
+    max_cost: float | None = typer.Option(
+        None,
+        "--max-cost",
+        help=(
+            "Soft API cost limit in USD. "
+            "Supported for models with configured pricing."
+        ),
+    ),
 ) -> None:
     """Run a Java-to-Go migration evaluation with optional repairs."""
 
@@ -170,6 +183,26 @@ def run(
         raise typer.BadParameter(
             str(exc)
         ) from exc
+
+    if max_cost is not None:
+        if max_cost <= 0:
+            raise typer.BadParameter(
+                "--max-cost must be greater than 0"
+            )
+
+        if not has_pricing(adapter.name):
+            raise typer.BadParameter(
+                "--max-cost is not supported for "
+                f"{adapter.name}; pricing is not configured"
+            )
+
+    adapter = CachedModelAdapter(
+        adapter,
+        cache_dir=(
+            results_dir
+            / ".cache"
+        ),
+    )
 
     java_problems = load_java_problems(
         java_dataset
@@ -232,9 +265,11 @@ def run(
             None,
         ),
         prompt_hash=_current_prompt_hash(),
+        max_cost_usd=max_cost,
     )
 
     attempts_by_problem = []
+    estimated_cost_usd = 0.0
 
     for position, problem in enumerate(
         selected,
@@ -256,6 +291,18 @@ def run(
                 attempt,
             )
 
+            attempt_cost = estimate_model_cost_usd(
+                model_name=attempt.model_name,
+                input_tokens=attempt.input_tokens,
+                output_tokens=attempt.output_tokens,
+            )
+
+            if (
+                attempt_cost is not None
+                and not attempt.cache_hit
+            ):
+                estimated_cost_usd += attempt_cost
+
         final_attempt = attempts[-1]
 
         typer.echo(
@@ -265,9 +312,25 @@ def run(
             f"(iteration {final_attempt.iteration})"
         )
 
+        if (
+            max_cost is not None
+            and estimated_cost_usd >= max_cost
+        ):
+            typer.echo(
+                "Cost limit reached after current problem: "
+                f"${estimated_cost_usd:.4f} "
+                f">= ${max_cost:.4f}. "
+                "Stopping before the next problem."
+            )
+            break
+
     typer.echo("")
     typer.echo(
         f"Model: {adapter.name}"
+    )
+
+    evaluated_count = len(
+        attempts_by_problem
     )
 
     for iteration in range(
@@ -290,13 +353,19 @@ def run(
 
         pass_rate = (
             passes
-            / len(selected)
+            / evaluated_count
         )
 
         typer.echo(
             f"pass@1 iteration {iteration}: "
-            f"{passes}/{len(selected)} "
+            f"{passes}/{evaluated_count} "
             f"({pass_rate:.1%})"
+        )
+
+    if has_pricing(adapter.name):
+        typer.echo(
+            "Estimated API cost: "
+            f"${estimated_cost_usd:.4f}"
         )
 
     typer.echo(

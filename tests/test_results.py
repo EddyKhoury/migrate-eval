@@ -305,3 +305,24 @@ def test_attempt_to_record_persists_model_telemetry():
     assert record["model_duration"] == 2.5
     assert record["input_tokens"] == 120
     assert record["output_tokens"] == 45
+
+
+def test_attempt_to_record_persists_cache_hit():
+    attempt = MigrationAttempt(
+        task_id="Go/0",
+        model_name="fake-model",
+        prompt="prompt",
+        raw_response="response",
+        go_code="package main\n",
+        run_result=RunResult(
+            status=RunStatus.PASS,
+            stdout="",
+            stderr="",
+            duration=0.1,
+        ),
+        cache_hit=True,
+    )
+
+    record = attempt_to_record(attempt)
+
+    assert record["cache_hit"] is True

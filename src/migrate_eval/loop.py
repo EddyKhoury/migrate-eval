@@ -27,6 +27,7 @@ class MigrationAttempt:
     model_duration: float = 0.0
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cache_hit: bool = False
 
 
 Runner = Callable[..., RunResult]
@@ -65,7 +66,29 @@ def _execute_prompt(
             model_duration=model_duration,
         )
 
-    model_duration = time.perf_counter() - model_start
+    measured_model_duration = (
+        time.perf_counter()
+        - model_start
+    )
+
+    model_duration = getattr(
+        model,
+        "last_model_duration",
+        None,
+    )
+
+    if model_duration is None:
+        model_duration = (
+            measured_model_duration
+        )
+
+    cache_hit = bool(
+        getattr(
+            model,
+            "last_cache_hit",
+            False,
+        )
+    )
 
     input_tokens = getattr(
         model,
@@ -97,6 +120,7 @@ def _execute_prompt(
             model_duration=model_duration,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cache_hit=cache_hit,
         )
 
     run_result = runner(
@@ -115,6 +139,7 @@ def _execute_prompt(
         model_duration=model_duration,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        cache_hit=cache_hit,
     )
 
 
