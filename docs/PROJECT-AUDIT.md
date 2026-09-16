@@ -6437,3 +6437,105 @@ MILESTONE 4 — FULL EVALUATION: COMPLETE
 
 The project now has reproducible full-benchmark measurements showing both single-shot migration performance and the effect of test-driven repair across two substantially different model configurations.
 
+
+# Milestone 5 — Ship It
+
+## Step 5.1 — Final README and Architecture
+
+### Status
+
+Completed.
+
+### Goal
+
+Turn the Milestone 4 evaluation README into the final project README and document the complete migrate-eval workflow clearly enough for someone outside the project to understand and run it.
+
+### Files Modified
+
+    README.md
+    docs/PROJECT-AUDIT.md
+
+### Files Added
+
+    docs/images/migrate-eval-architecture.png
+
+### README Updates
+
+The README now includes:
+
+- project motivation and Java-to-Go evaluation scope;
+- architecture overview;
+- repository structure;
+- evaluation pipeline diagram;
+- explanation of the migration and repair loop;
+- full benchmark results for both evaluated models;
+- pass@1 by repair iteration;
+- failure taxonomy;
+- evaluation plots;
+- latency and token telemetry;
+- installation instructions;
+- CLI usage examples for Ollama and OpenAI;
+- reproducibility and JSONL result structure;
+- model completion caching;
+- Docker sandbox design;
+- oracle validation and Go/95 exclusion;
+- repair-prompt design;
+- evaluation metric;
+- project limitations;
+- real Go/2 repair trace;
+- possible next steps;
+- HumanEval-X / CodeGeeX credits;
+- MIT licence reference.
+
+### Architecture Diagram
+
+Added:
+
+    docs/images/migrate-eval-architecture.png
+
+The diagram shows the full evaluation path:
+
+    HumanEval-X
+        ->
+    Initial Migration Prompt
+        ->
+    LLM
+        ->
+    Go Code Extraction
+        ->
+    Docker Test Oracle
+        ->
+    PASS / FAIL
+
+PASS results are persisted to JSONL.
+
+Failures are sent through the repair prompt and looped back to the model for another attempt.
+
+### README Style Decision
+
+The final README was intentionally kept factual and technical rather than written as marketing copy.
+
+The introduction, project motivation, results interpretation, and architecture explanation were written in a direct engineering-project style.
+
+### Verification
+
+The complete pytest suite was run after the README changes and passed successfully.
+
+The architecture image was also verified in the rendered Markdown preview.
+
+### Milestone 5 Progress
+
+Completed:
+
+- Step 5.1 — Final README and architecture
+
+Remaining:
+
+- Step 5.2 — Demo recording / GIF
+- Step 5.3 — GitHub Actions CI
+- Step 5.4 — Reproducibility and release verification
+- Step 5.5 — Project launch
+
+### Next Action
+
+Create a short demo showing a real migration progressing from failure to PASS through the repair loop.
