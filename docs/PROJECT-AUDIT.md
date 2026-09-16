@@ -6701,3 +6701,92 @@ Remaining:
 ### Next Action
 
 Add GitHub Actions CI for the pytest suite.
+
+## Step 5.3 — GitHub Actions CI
+
+### Status
+
+Completed.
+
+### Goal
+
+Add continuous integration so the migrate-eval pytest suite runs automatically on pushes and pull requests.
+
+### Files Added
+
+    .github/workflows/tests.yml
+
+### CI Workflow
+
+The GitHub Actions workflow runs on:
+
+    push
+    pull_request
+
+The workflow performs:
+
+1. repository checkout;
+2. Python 3.12 setup;
+3. project installation with development dependencies;
+4. Go Docker oracle image build;
+5. pytest execution.
+
+### CI Design
+
+The workflow intentionally does not run:
+
+    make setup
+
+because the full setup target also requires:
+
+    Ollama
+    qwen2.5-coder:14b
+
+These are not required for the harness test suite and would make CI unnecessarily heavy.
+
+The CI workflow does not use:
+
+    OpenAI API credentials
+    real OpenAI requests
+    real Ollama requests
+
+Model behavior in pytest remains mocked.
+
+Docker is built because the test suite contains integration tests for the real Go execution oracle.
+
+### Verification
+
+Local pytest suite:
+
+    PASS
+
+GitHub Actions workflow:
+
+    PASS
+
+Verified workflow stages:
+
+    Check out repository
+    Set up Python
+    Install project
+    Build Go test image
+    Run tests
+
+The workflow completed successfully on GitHub after being pushed to the main branch.
+
+### Milestone 5 Progress
+
+Completed:
+
+- Step 5.1 — Final README and architecture
+- Step 5.2 — Repair-loop demo
+- Step 5.3 — GitHub Actions CI
+
+Remaining:
+
+- Step 5.4 — Reproducibility and release verification
+- Step 5.5 — Project launch
+
+### Next Action
+
+Perform the final reproducibility, security, repository, and release-readiness checks before publishing the project as finished.
