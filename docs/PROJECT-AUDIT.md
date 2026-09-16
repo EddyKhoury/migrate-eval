@@ -6790,3 +6790,150 @@ Remaining:
 ### Next Action
 
 Perform the final reproducibility, security, repository, and release-readiness checks before publishing the project as finished.
+
+## Step 5.4 — Reproducibility and Release Verification
+
+### Status
+
+Completed.
+
+### Goal
+
+Verify that the public repository can be cloned, set up, tested, and used from a clean checkout, and perform final security and release-artifact checks.
+
+### Reproducible Run Command
+
+The Makefile now supports:
+
+    make run
+
+with configurable values:
+
+    MODEL
+    N
+    ITERS
+    WORKERS
+
+Example:
+
+    make run MODEL=ollama:qwen2.5-coder:14b N=10
+
+The default configuration is:
+
+    MODEL=ollama:qwen2.5-coder:14b
+    N=10
+    ITERS=3
+    WORKERS=1
+
+### Clean-Clone Verification
+
+A fresh repository clone was created under:
+
+    /tmp/migrate-eval-release-check
+
+The following public workflow was tested successfully:
+
+    git clone
+    make setup
+    make test
+    make run MODEL=ollama:qwen2.5-coder:14b N=1 ITERS=0
+
+### Fresh Setup Result
+
+make setup successfully:
+
+- created a new Python virtual environment;
+- installed migrate-eval and development dependencies;
+- downloaded HumanEval-X Java data;
+- downloaded HumanEval-X Go data;
+- verified 164 Java problems;
+- verified 164 Go problems;
+- built the Go Docker oracle image;
+- verified the configured Ollama model.
+
+Final setup message:
+
+    migrate-eval setup complete.
+
+### Fresh Test Result
+
+Command:
+
+    make test
+
+Result:
+
+    103 passed
+
+### Fresh Evaluation Result
+
+Command:
+
+    make run MODEL=ollama:qwen2.5-coder:14b N=1 ITERS=0
+
+Result:
+
+    Go/0 PASS
+
+Cumulative pass rate:
+
+    1 / 1
+    100.0%
+
+This confirms that the documented clone -> setup -> test -> run path works from a clean checkout.
+
+### Security Verification
+
+Verified that:
+
+- no .env files are tracked;
+- no .env files exist anywhere in Git history;
+- no plausible OpenAI API key patterns were detected in Git history;
+- OPENAI_API_KEY references in Git history are documentation examples in README.md;
+- no secret-like strings were found in the official evaluation JSONL or metadata files.
+
+### Release Artifact Verification
+
+Verified tracked project artifacts:
+
+    README.md
+    LICENSE
+    pyproject.toml
+    .github/workflows/tests.yml
+    docs/demo/migrate-eval-repair.gif
+    docs/images/migrate-eval-architecture.png
+    results/plots/pass_rate_vs_iteration.png
+    results/plots/failure_taxonomy.png
+
+### Official Raw Evaluation Results
+
+The official full-benchmark result files were added to Git so the README measurements can be inspected directly.
+
+GPT-5.6 Terra:
+
+    results/openai__gpt-5.6-terra/
+    20260914T125653Z-c85029de.jsonl
+    20260914T125653Z-c85029de.meta.json
+
+qwen2.5-coder:14b:
+
+    results/ollama__qwen2.5-coder__14b/
+    20260914T132926Z-8fc0f7f9.jsonl
+    20260914T132926Z-8fc0f7f9.meta.json
+
+### Milestone 5 Progress
+
+Completed:
+
+- Step 5.1 — Final README and architecture
+- Step 5.2 — Repair-loop demo
+- Step 5.3 — GitHub Actions CI
+- Step 5.4 — Reproducibility and release verification
+
+Remaining:
+
+- Step 5.5 — Project launch
+
+### Next Action
+
+Complete the final project-launch step: verify the public repository presentation and prepare the final CV, portfolio, and project summary.
