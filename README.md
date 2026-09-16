@@ -185,6 +185,29 @@ make test
 
 ## Running an Evaluation
 
+### Quick Run
+
+After running `make setup`, an evaluation can be started with:
+
+```bash
+make run MODEL=ollama:qwen2.5-coder:14b N=10
+```
+
+The defaults are:
+
+- `ITERS=3`
+- `WORKERS=1`
+
+They can also be overridden:
+
+```bash
+make run \
+  MODEL=ollama:qwen2.5-coder:14b \
+  N=10 \
+  ITERS=3 \
+  WORKERS=1
+```
+
 ### Local Ollama Model
 
 ```bash
@@ -276,7 +299,7 @@ Model completions are cached using:
 model name + exact prompt
 ```
 
-This means identical reruns can reuse a previous completion instead of repeating the same paid or local inference.
+This lets identical reruns reuse a previous completion instead of repeating the same inference.
 
 ---
 
