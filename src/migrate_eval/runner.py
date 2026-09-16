@@ -77,6 +77,15 @@ def run_go_tests(
     with tempfile.TemporaryDirectory(prefix="migrate-eval-") as temp_dir:
         workdir = Path(temp_dir)
 
+        # TemporaryDirectory is normally created with mode 0700.
+        # On Linux CI, the non-root Docker user cannot traverse a
+        # bind-mounted host directory with those permissions.
+        #
+        # The directory only contains generated benchmark source/tests and
+        # is mounted read-only inside the container, so make it traversable
+        # and readable for the sandbox user.
+        workdir.chmod(0o755)
+
         # Write the temporary Go project on the host.
         # It will be mounted read-only inside Docker at /src.
         (workdir / "solution.go").write_text(
