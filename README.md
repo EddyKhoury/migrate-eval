@@ -12,6 +12,14 @@ For the evaluation, I currently use the Java and Go subsets of HumanEval-X.
 
 ---
 
+## Demo
+
+A real repair-loop example on `Go/2`:
+
+![migrate-eval repair demo](docs/demo/migrate-eval-repair.gif)
+
+---
+
 ## Architecture
 
 ![migrate-eval evaluation pipeline](docs/images/migrate-eval-architecture.png)
@@ -40,6 +48,7 @@ migrate-eval/
 │       └── ollama_adapter.py
 ├── scripts/
 │   ├── fetch_data.py
+│   ├── demo_repair.py
 │   ├── validate_oracle.py
 │   └── plot_results.py
 ├── results/
@@ -250,7 +259,7 @@ The JSONL file stores every model attempt, including:
 - input/output token counts
 - cache-hit status
 
-The metadata file records the run configuration, including:
+The metadata file records the run configuration:
 
 - model
 - repair limit

@@ -6539,3 +6539,165 @@ Remaining:
 ### Next Action
 
 Create a short demo showing a real migration progressing from failure to PASS through the repair loop.
+
+## Step 5.2 — Repair-Loop Demo
+
+### Status
+
+Completed.
+
+### Goal
+
+Add a short visual demonstration of the repair loop showing a real benchmark problem progressing from failure to a passing Go implementation.
+
+### Files Added
+
+    scripts/demo_repair.py
+    docs/demo/migrate-eval-repair.gif
+
+### Files Modified
+
+    README.md
+    docs/PROJECT-AUDIT.md
+
+### Demo Problem
+
+Task:
+
+    Go/2
+
+Model:
+
+    openai:gpt-5.6-terra
+
+Observed repair trace:
+
+    iteration 0 — COMPILE_ERROR
+    iteration 1 — TEST_FAIL
+    iteration 2 — PASS
+
+Iteration 0 failed because the generated Go implementation attempted to use the remainder operator with a float64 value.
+
+Iteration 1 fixed compilation but still failed the target Go tests.
+
+Iteration 2 corrected the behavior and passed the HumanEval-X Go test suite.
+
+### Demo Script
+
+Created:
+
+    scripts/demo_repair.py
+
+The script:
+
+- loads the real HumanEval-X Java and Go benchmark data;
+- selects Go/2;
+- uses the existing GPT-5.6 Terra model adapter;
+- uses the persistent model completion cache;
+- runs the normal migrate-eval repair loop;
+- displays each iteration status;
+- shows a short compiler/test feedback excerpt for failed iterations.
+
+The demo therefore uses the same migration, extraction, repair, and Docker oracle path as the evaluation harness.
+
+### Cache Behavior
+
+The recorded demo reused previously generated model responses from:
+
+    results/.cache
+
+All three completions were cache hits.
+
+This allows the real evaluation trace to be demonstrated without repeating paid OpenAI requests.
+
+### Demo Artifact
+
+Created:
+
+    docs/demo/migrate-eval-repair.gif
+
+The GIF is embedded near the top of the README.
+
+The rendered README was visually checked and the animation displays correctly.
+
+### Verification
+
+Demo script syntax check:
+
+    python -m py_compile scripts/demo_repair.py
+
+Result:
+
+    PASS
+
+Real demo execution:
+
+    COMPILE_ERROR
+    -> TEST_FAIL
+    -> PASS
+
+### Milestone 5 Progress
+
+Completed:
+
+- Step 5.1 — Final README and architecture
+- Step 5.2 — Repair-loop demo
+
+Remaining:
+
+- Step 5.3 — GitHub Actions CI
+- Step 5.4 — Reproducibility and release verification
+- Step 5.5 — Project launch
+
+### Next Action
+
+Add GitHub Actions continuous integration so the harness pytest suite runs automatically on pushes and pull requests.
+
+## Step 5.2 — Repair-Loop Demo
+
+### Status
+
+Completed.
+
+### Implemented
+
+Added:
+
+    scripts/demo_repair.py
+    docs/demo/migrate-eval-repair.gif
+
+The demo uses the real Go/2 repair trace with GPT-5.6 Terra:
+
+    iteration 0 — COMPILE_ERROR
+    iteration 1 — TEST_FAIL
+    iteration 2 — PASS
+
+The demo script uses the normal migrate-eval pipeline and reuses cached model responses so the recording does not require new paid OpenAI calls.
+
+The GIF is embedded near the top of README.md and was verified in the Markdown preview.
+
+### Verification
+
+    python -m py_compile scripts/demo_repair.py
+    python -m pytest
+
+The demo was also executed successfully and produced:
+
+    COMPILE_ERROR -> TEST_FAIL -> PASS
+
+### Milestone 5 Progress
+
+Completed:
+
+- Step 5.1 — Final README and architecture
+- Step 5.2 — Repair-loop demo
+
+Remaining:
+
+- Step 5.3 — GitHub Actions CI
+- Step 5.4 — Reproducibility and release verification
+- Step 5.5 — Project launch
+
+### Next Action
+
+Add GitHub Actions CI for the pytest suite.
