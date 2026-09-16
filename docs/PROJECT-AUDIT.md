@@ -6937,3 +6937,56 @@ Remaining:
 ### Next Action
 
 Complete the final project-launch step: verify the public repository presentation and prepare the final CV, portfolio, and project summary.
+
+## Pre-Launch CI Portability Fix
+
+### Status
+
+Completed.
+
+### Issue
+
+GitHub Actions initially failed 5 Docker integration tests on Linux with:
+
+    cp: cannot stat '/src/solution.go': Permission denied
+
+The same tests passed locally on macOS.
+
+### Cause
+
+Python TemporaryDirectory creates the host directory with restrictive permissions.
+
+On GitHub Actions/Linux, the non-root Docker user could not traverse the bind-mounted source directory.
+
+### Fix
+
+Updated:
+
+    src/migrate_eval/runner.py
+
+The temporary benchmark directory is now made readable and traversable before being mounted into Docker.
+
+The Docker sandbox remains:
+
+- non-root;
+- network-isolated;
+- read-only;
+- CPU-limited;
+- memory-limited;
+- timeout-protected.
+
+### Verification
+
+Runner and repair-loop tests:
+
+    22 passed
+
+Full local test suite:
+
+    103 passed
+
+GitHub Actions:
+
+    PASS
+
+The final GitHub Actions workflow completed successfully on Linux.
